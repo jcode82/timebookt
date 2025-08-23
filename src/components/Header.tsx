@@ -6,7 +6,7 @@ export default function Header() {
       </h1>
       <nav>
         <button className="text-sm font-medium text-[#1E2A38] hover:text-[#3BAFDA]">
-          Login
+          LOGIN
         </button>
       </nav>
     </header>
