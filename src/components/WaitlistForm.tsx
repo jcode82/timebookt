@@ -16,9 +16,8 @@ export default function WaitlistForm() {
     const { error } = await supabase.from("waitlist").insert([{ email }] as any);
 
     if (error) {
-        console.log("Supabase error:", error);
       // Supabase will send a Postgres error when UNIQUE constraint is violated
-      if (error.code === "23505") {
+      if (error.code === "23505" || error.message.includes("duplicate key value")) {
         // 23505 = unique_violation
         setMessage("You're already on the waitlist!");
       }
