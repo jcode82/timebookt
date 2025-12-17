@@ -11,7 +11,10 @@ import type {
   CreateAppointmentInput,
 } from "./types";
 
-const mapAppointment = (row: Tables<typeof TABLES.appointments>): AppointmentRecord => ({
+type AppointmentsTable = "appointments";
+type AvailabilityTable = "availability_blocks";
+
+const mapAppointment = (row: Tables<AppointmentsTable>): AppointmentRecord => ({
   id: row.id,
   businessId: row.business_id,
   customerId: row.customer_id,
@@ -26,9 +29,7 @@ const mapAppointment = (row: Tables<typeof TABLES.appointments>): AppointmentRec
   updatedAt: row.updated_at,
 });
 
-const mapAvailability = (
-  row: Tables<typeof TABLES.availabilityBlocks>,
-): AvailabilityBlock => ({
+const mapAvailability = (row: Tables<AvailabilityTable>): AvailabilityBlock => ({
   id: row.id,
   businessId: row.business_id,
   staffId: row.staff_id,
@@ -41,7 +42,7 @@ const mapAvailability = (
 export async function createAppointment(input: CreateAppointmentInput): Promise<AppointmentRecord> {
   const supabase = getSupabaseAdmin();
 
-  const payload: TablesInsert<typeof TABLES.appointments> = {
+  const payload: TablesInsert<AppointmentsTable> = {
     business_id: input.businessId,
     customer_id: input.customerId,
     service_id: input.serviceId,
