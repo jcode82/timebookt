@@ -6,7 +6,7 @@ import { REGION } from "@/lib/env";
 import type { Tables, TablesInsert } from "../../../supabase/types";
 import type { BusinessDashboardMetrics, BusinessProfile, BusinessSettings, CreateBusinessInput } from "./types";
 
-const defaultSettings = (timezone: string): BusinessSettings => ({
+const defaultSettings = (): BusinessSettings => ({
   bookingWindowDays: DEFAULT_BOOKING_WINDOW_DAYS,
   cancellationWindowHours: DEFAULT_CANCELLATION_WINDOW_HOURS,
   bufferMinutes: 10,
@@ -15,6 +15,22 @@ const defaultSettings = (timezone: string): BusinessSettings => ({
     sms: false,
   },
 });
+
+const isBusinessSettings = (value: unknown): value is BusinessSettings => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as Partial<BusinessSettings>;
+  const notifications = candidate.notifications as Partial<BusinessSettings["notifications"]> | undefined;
+  return (
+    typeof candidate.bookingWindowDays === "number" &&
+    typeof candidate.cancellationWindowHours === "number" &&
+    typeof candidate.bufferMinutes === "number" &&
+    notifications !== undefined &&
+    typeof notifications.email === "boolean" &&
+    typeof notifications.sms === "boolean"
+  );
+};
 
 const mapBusiness = (row: Tables<typeof TABLES.businesses>): BusinessProfile => ({
   id: row.id,
@@ -25,7 +41,7 @@ const mapBusiness = (row: Tables<typeof TABLES.businesses>): BusinessProfile => 
   timezone: row.timezone,
   contactEmail: row.contact_email,
   contactPhone: row.contact_phone,
-  settings: (row.settings as BusinessSettings) ?? defaultSettings(row.timezone),
+  settings: isBusinessSettings(row.settings) ? row.settings : defaultSettings(),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -48,7 +64,7 @@ export async function createBusiness(payload: CreateBusinessInput): Promise<Busi
     timezone: payload.timezone,
     contact_email: payload.contactEmail,
     contact_phone: payload.contactPhone,
-    settings: defaultSettings(payload.timezone),
+    settings: defaultSettings(),
   };
 
   const { data, error } = await supabase
