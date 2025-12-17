@@ -15,10 +15,10 @@ export interface DashboardData {
 }
 
 const cachedDashboard = unstable_cache(
-  async (slug: string): Promise<DashboardData> => {
+  async (slug: string): Promise<DashboardData | null> => {
     const business = await getBusinessBySlug(slug);
     if (!business) {
-      throw new Error(`Business not found for slug ${slug}`);
+      return null;
     }
 
     const [metrics, appointments, customers] = await Promise.all([
@@ -35,10 +35,10 @@ const cachedDashboard = unstable_cache(
       customers,
     };
   },
-  ["dashboard-data"],
+  (slug: string) => ["dashboard-data", slug],
   { revalidate: CACHE_ONE_HOUR },
 );
 
-export async function getDashboardData(slug: string): Promise<DashboardData> {
+export async function getDashboardData(slug: string): Promise<DashboardData | null> {
   return cachedDashboard(slug);
 }

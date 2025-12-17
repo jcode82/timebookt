@@ -20,3 +20,5 @@ export const env: RuntimeEnv = {
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
   defaultRegion: process.env.NEXT_PUBLIC_TIMEBOOKT_REGION ?? DEFAULT_REGION,
 };
+
+export const REGION = process.env.NEXT_PUBLIC_TIMEBOOKT_REGION ?? DEFAULT_REGION;

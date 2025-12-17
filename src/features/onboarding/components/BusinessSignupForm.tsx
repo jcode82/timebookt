@@ -7,7 +7,7 @@ import { createBusinessAction } from "@/features/onboarding/api/createBusinessAc
 
 const initialState: BusinessOnboardingForm = {
   name: "",
-  regionCode: "",
+  regionCode: process.env.NEXT_PUBLIC_TIMEBOOKT_REGION ?? "",
   timezone: "America/New_York",
   contactEmail: "",
   contactPhone: "",
@@ -35,9 +35,12 @@ export function BusinessSignupForm() {
     }
 
     startTransition(async () => {
-      const created = await createBusinessAction(result.data);
-      setMessage(`Business ${created.name} ready with slug ${created.slug}`);
-      setFormData(initialState);
+      try {
+        await createBusinessAction(result.data);
+      } catch (error) {
+        const messageText = error instanceof Error ? error.message : "Unable to create business";
+        setMessage(messageText);
+      }
     });
   };
 
@@ -109,7 +112,7 @@ export function BusinessSignupForm() {
       >
         {pending ? "Creating..." : "Create business"}
       </button>
-      {message && <p className="text-sm text-emerald-600">{message}</p>}
+      {message && <p className="text-sm text-rose-600">{message}</p>}
     </form>
   );
 }

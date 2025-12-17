@@ -7,7 +7,7 @@ create table if not exists public.businesses (
   slug text not null unique,
   name text not null,
   description text,
-  region_code text default 'global',
+  region_code text not null default 'global',
   timezone text not null default 'America/New_York',
   contact_email text not null,
   contact_phone text,
@@ -19,6 +19,7 @@ create table if not exists public.businesses (
 create table if not exists public.staff (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses(id) on delete cascade,
+  region_code text not null default 'global',
   full_name text not null,
   email text,
   phone text,
@@ -30,6 +31,7 @@ create table if not exists public.staff (
 create table if not exists public.services (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses(id) on delete cascade,
+  region_code text not null default 'global',
   name text not null,
   description text,
   duration_minutes integer not null,
@@ -43,6 +45,7 @@ create table if not exists public.services (
 create table if not exists public.customers (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses(id) on delete cascade,
+  region_code text not null default 'global',
   full_name text not null,
   email text not null,
   phone text,
@@ -55,6 +58,7 @@ create table if not exists public.availability_blocks (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses(id) on delete cascade,
   staff_id uuid references public.staff(id) on delete cascade,
+  region_code text not null default 'global',
   day_of_week smallint not null check (day_of_week between 0 and 6),
   start_time timestamptz not null,
   end_time timestamptz not null,
@@ -68,6 +72,7 @@ create table if not exists public.appointments (
   customer_id uuid not null references public.customers(id) on delete cascade,
   service_id uuid not null references public.services(id) on delete cascade,
   staff_id uuid references public.staff(id) on delete set null,
+  region_code text not null default 'global',
   start_time timestamptz not null,
   end_time timestamptz not null,
   status text not null default 'scheduled' check (status in ('scheduled','canceled','completed')),
@@ -80,6 +85,7 @@ create table if not exists public.appointments (
 create table if not exists public.templates (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses(id) on delete cascade,
+  region_code text not null default 'global',
   slug text not null,
   channel text not null check (channel in ('email','sms')),
   name text not null,
@@ -94,6 +100,7 @@ create table if not exists public.templates (
 create table if not exists public.audit_logs (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses(id) on delete cascade,
+  region_code text not null default 'global',
   actor_type text not null,
   actor_id uuid,
   action text not null,
@@ -134,3 +141,6 @@ create policy "Business members manage templates" on public.templates
       select id from public.staff where staff.business_id = templates.business_id
     )
   );
+
+create index if not exists businesses_slug_region_idx
+  on public.businesses (slug, region_code);

@@ -2,8 +2,10 @@ import {
   createTemplate,
   getTemplateBySlug,
   listTemplates,
+  updateTemplate,
   type TemplateInput,
   type TemplateRecord,
+  type UpdateTemplateInput,
 } from "@/domain/templates";
 
 export type CreateTemplateAgentInput = TemplateInput;
@@ -26,4 +28,10 @@ export async function listTemplatesAgentHook(
   businessId: string,
 ): Promise<TemplateRecord[]> {
   return listTemplates(businessId);
+}
+
+export async function updateTemplateAgentHook(
+  input: UpdateTemplateInput,
+): Promise<TemplateRecord> {
+  return updateTemplate(input);
 }

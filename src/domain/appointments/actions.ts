@@ -1,6 +1,7 @@
 import { DASHBOARD_LIMITS, TABLES } from "@/lib/constants";
 import { DomainError } from "@/lib/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
+import { REGION } from "@/lib/env";
 import type { Tables, TablesInsert, TablesUpdate } from "../../../supabase/types";
 import type {
   AppointmentRecord,
@@ -45,6 +46,7 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
     customer_id: input.customerId,
     service_id: input.serviceId,
     staff_id: input.staffId,
+    region_code: REGION,
     start_time: input.startTime,
     end_time: input.endTime,
     notes: input.notes,
@@ -75,6 +77,7 @@ export async function cancelAppointment(input: CancelAppointmentInput): Promise<
     .from(TABLES.appointments)
     .update(payload)
     .eq("id", input.appointmentId)
+    .eq("region_code", REGION)
     .select()
     .single();
 
@@ -94,6 +97,7 @@ export async function listAppointmentsForBusiness(
     .from(TABLES.appointments)
     .select()
     .eq("business_id", businessId)
+    .eq("region_code", REGION)
     .order("start_time", { ascending: true })
     .limit(limit);
 
@@ -112,6 +116,7 @@ export async function getAvailability(
     .from(TABLES.availabilityBlocks)
     .select()
     .eq("business_id", request.businessId)
+    .eq("region_code", REGION)
     .gte("start_time", request.startDate)
     .lte("end_time", request.endDate);
 

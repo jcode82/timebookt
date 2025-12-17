@@ -5,10 +5,10 @@ import {
   listBusinessesByRegion,
   type BusinessDashboardMetrics,
   type BusinessProfile,
-  type CreateBusinessPayload,
+  type CreateBusinessInput,
 } from "@/domain/businesses";
 
-export type CreateBusinessAgentInput = CreateBusinessPayload;
+export type CreateBusinessAgentInput = CreateBusinessInput;
 export type CreateBusinessAgentOutput = BusinessProfile;
 
 export async function createBusinessAgentHook(

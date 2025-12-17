@@ -24,3 +24,12 @@ export interface TemplateInput {
   body: string;
   locale: string;
 }
+
+export interface UpdateTemplateInput {
+  businessId: string;
+  templateId: string;
+  name?: string;
+  subject?: string | null;
+  body?: string;
+  locale?: string;
+}

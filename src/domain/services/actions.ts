@@ -1,6 +1,7 @@
 import { TABLES } from "@/lib/constants";
 import { DomainError } from "@/lib/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
+import { REGION } from "@/lib/env";
 import type { Tables } from "../../../supabase/types";
 import type { ServiceRecord } from "./types";
 
@@ -21,6 +22,7 @@ export async function listServicesForBusiness(businessId: string): Promise<Servi
     .from(TABLES.services)
     .select()
     .eq("business_id", businessId)
+    .eq("region_code", REGION)
     .eq("is_active", true)
     .order("created_at", { ascending: true });
 

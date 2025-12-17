@@ -15,7 +15,7 @@ export interface BusinessProfile {
   slug: string;
   name: string;
   description?: string | null;
-  regionCode?: string | null;
+  regionCode: string;
   timezone: string;
   contactEmail: string;
   contactPhone?: string | null;
@@ -24,7 +24,7 @@ export interface BusinessProfile {
   updatedAt: string;
 }
 
-export interface CreateBusinessPayload {
+export interface CreateBusinessInput {
   name: string;
   regionCode: string;
   timezone: string;

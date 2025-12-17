@@ -1,6 +1,7 @@
 import { TABLES } from "@/lib/constants";
 import { DomainError } from "@/lib/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
+import { REGION } from "@/lib/env";
 import type { Tables, TablesInsert } from "../../../supabase/types";
 import type { CreateCustomerInput, CustomerFilter, CustomerProfile } from "./types";
 
@@ -19,6 +20,7 @@ export async function createCustomer(input: CreateCustomerInput): Promise<Custom
   const supabase = getSupabaseAdmin();
   const insert: TablesInsert<typeof TABLES.customers> = {
     business_id: input.businessId,
+    region_code: REGION,
     full_name: input.name,
     email: input.email,
     phone: input.phone,
@@ -44,6 +46,7 @@ export async function getCustomerByEmail(businessId: string, email: string): Pro
     .from(TABLES.customers)
     .select()
     .eq("business_id", businessId)
+    .eq("region_code", REGION)
     .ilike("email", email)
     .maybeSingle();
 
@@ -60,6 +63,7 @@ export async function listCustomers(filter: CustomerFilter): Promise<CustomerPro
     .from(TABLES.customers)
     .select()
     .eq("business_id", filter.businessId)
+    .eq("region_code", REGION)
     .order("created_at", { ascending: false })
     .limit(filter.limit ?? 20);
 
@@ -72,6 +76,13 @@ export async function listCustomers(filter: CustomerFilter): Promise<CustomerPro
   const { data, error } = await query;
 
   if (error) {
+    const message = error.message ?? "Unable to list customers";
+    if (message.includes("column") && message.includes("region_code")) {
+      throw new DomainError(
+        "Customers table is missing the region_code column. Run supabase/schema.sql migrations.",
+        { error, filter },
+      );
+    }
     throw new DomainError("Unable to list customers", { error, filter });
   }
 

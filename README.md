@@ -1,62 +1,85 @@
-# TimeBookt
+# TimeBookt v2
 
-TimeBookt is a modular appointment OS for AI-assisted service businesses. It ships with a Next.js 14 App Router frontend, Supabase-backed domain modules, AI agent hooks, and a ready-to-clone multi-tenant architecture for launching per city or country.
+TimeBookt v2 is a region-ready booking OS built with Next.js 14 App Router, Supabase, and domain-driven modules. Every feature (home, onboarding, dashboard, booking) is isolated under `src/features`, while `src/domain` encapsulates typed actions. Agent integrations call the system through deterministic hooks and the new `agentRouter` so multi-agent orchestration stays stable across regions.
 
-## Architecture
+## Tech Stack
+- Next.js 14 App Router + TypeScript + Server Actions
+- Supabase (auth ready) with region-aware schema (`region_code` on every tenant table)
+- Tailwind via `globals.css`
+- Domain-driven modules (`src/domain/*`) with typed DTOs and Supabase adapters
+- Agent hooks + router (`src/agents/**/*`) exposing typed IO contracts
 
-- **App Router + Server Actions** connect feature folders under `src/features` directly to Supabase-backed domain modules for zero-latency actions.
-- **Domain modules** (`src/domain/*`) provide strongly typed actions + DTOs around businesses, customers, appointments, services, and templates.
-- **Agent hooks** (`src/agents/hooks/*`) expose deterministic I/O contracts so multi-agent systems can trigger domain actions without UI coupling.
-- **API routes** (`src/app/api/*`) mirror the domain boundaries for REST or webhook integrations.
-- **Supabase schema & types** live under `/supabase` and can be cloned per region along with environment overrides.
+## Environment & Region Setup
+1. Copy `.env.example` to `.env.local`.
+2. Populate:
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=...
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+   SUPABASE_SERVICE_ROLE_KEY=...
+   NEXT_PUBLIC_TIMEBOOKT_REGION=nyc   # required region identifier
+   NEXT_PUBLIC_TIMEBOOKT_MODE=landing # landing | app
+   ```
+3. Run `npm install` (already done for dependencies in `package-lock.json`).
+4. Start dev server with `npm run dev`.
 
-```
-src/
-├─ agents/hooks               # AI orchestration layer
-├─ app                        # Next.js routes (home, onboarding, dashboard, booking, APIs)
-├─ domain                     # DDD-style modules w/ actions + types
-├─ features                   # UI + server action bundles per feature
-├─ lib                        # cross-cutting env, constants, supabase clients
-└─ types (via supabase/types) # generated DB contracts
-```
+`REGION` (exported from `src/lib/env.ts`) is referenced by every domain query, so each deployment automatically scopes Supabase reads/writes with `.eq("region_code", REGION)`.
 
-## Regional replication
+> **Important:** After pulling this version, run `supabase/schema.sql` (or execute the new migrations inside Supabase) so each table includes the `region_code` column and supporting indexes/policies. If you see errors mentioning `column ... region_code` during development, your database has not been upgraded yet.
 
-1. Duplicate the Supabase project and run `supabase/schema.sql` to seed tables + policies.
-2. Copy `.env.example` to `.env.local` and set:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY`
-   - `NEXT_PUBLIC_TIMEBOOKT_REGION` (e.g. `nyc`, `ldn`).
-3. Run `npm install && npm run dev`.
-4. Seed business/services rows for the new region; hooks + routes automatically scope queries via the slug/region values.
+### Product Gate Modes
 
-Each deployment keeps the same codebase—only Supabase credentials + region env values change.
+Set `NEXT_PUBLIC_TIMEBOOKT_MODE=landing` in production to keep `/onboarding` and `/dashboard/*` behind the waitlist. The middleware (`src/middleware.ts`) redirects protected routes to `/`, and the home page serves the public landing component. Switching to `app` instantly reveals the full experience without another deploy.
 
-## AI agent connectivity
+## Database Schema
+- Run `supabase/schema.sql` to create tables + RLS policies (all tenant tables include `region_code text not null`).
+- Generate typed client bindings from `supabase/types.ts` if you refresh the schema.
+- `create index if not exists businesses_slug_region_idx on public.businesses (slug, region_code);` ensures fast `/dashboard/[slug]` lookups.
 
-- Multi-agent systems call `src/agents/hooks/*` to perform deterministic tasks (e.g., `createCustomerAgentHook`).
-- `/api/ai/concierge` provides a simple HTTP surface that forwards actions to those hooks.
-- `src/lib/ai/aiService.ts` centralizes routing so you can plug in your orchestration framework (CrewAI, LangGraph, etc.).
-- Agents can coordinate with templates, customers, and appointments without touching UI code because each domain exposes typed payloads + responses.
+## Creating a Business (Onboarding → Dashboard Redirect)
+1. Go to `/onboarding`.
+2. Submit the business form (name, region code, timezone, contact info). The slug is enforced as `${toSlug(name)}-${toSlug(regionCode)}`.
+3. After creation, the server action executes `redirect(`/dashboard/${business.slug}`);`, landing the operator inside the dashboard instantly.
+4. Region mismatches short-circuit inside `createBusiness`, guaranteeing isolation per deployment.
 
-## Development
+## Dashboard `/dashboard/[slug]`
+- Route loader fetches the business by slug + region. Missing slugs call `notFound()`.
+- Metrics combine appointments, customers, and audit logs with cached server actions.
+- Panels (`src/features/dashboard/components/*`) display totals, upcoming appointments, customer snippets, and automation history.
 
-```bash
-npm install
-npm run dev
-```
+## Booking Flow `/[businessSlug]/book`
+- Loader fetches business, active services, and availability, and calls `notFound()` if anything is missing.
+- `BookingFlow` handles service selection, slot selection, and confirmation. Empty states display friendly guidance when no services or availability exist.
+- Bookings trigger `createCustomer` + `createAppointment`, both scoped to `REGION`, then revalidate the booking path for SSR freshness.
 
-Key routes:
+## AI Agent Workflow
+- Typed union lives in `src/agents/agentTypes.ts`:
+  ```ts
+  export type AgentAction =
+    | { type: "createBusiness"; payload: CreateBusinessInput }
+    | { type: "createCustomer"; payload: CreateCustomerInput }
+    | { type: "createAppointment"; payload: CreateAppointmentInput }
+    | { type: "updateTemplate"; payload: UpdateTemplateInput };
+  ```
+- `src/agents/agentRouter.ts` routes every union branch to its hook.
+- `/api/ai/concierge/route.ts` simply `await agentRouter(action)` so external orchestrators can POST JSON without caring about UI code.
+- Hooks call domain actions, which call Supabase with fully typed payloads.
 
-- `/` marketing home with hero + agent showcase.
-- `/onboarding` business intake flow.
-- `/dashboard?business=your-slug` admin metrics + upcoming appointments.
-- `/[businessSlug]/book` customer booking portal.
-- `/api/*` domain-aligned REST endpoints (businesses, appointments, templates, AI concierge).
+## Region Replication in Under 5 Minutes
+1. Duplicate the Supabase project (or run `supabase/schema.sql` against a new instance).
+2. Copy environment variables and update `NEXT_PUBLIC_TIMEBOOKT_REGION` to the new city/country code.
+3. Deploy the Next.js app (Vercel or similar) with the new env values.
+4. Seed templates/services if needed and invite agents—the domain constraints ensure all data stays in the new region namespace.
 
-## Testing the scaffold
+## Booking + Dashboard Lifecycle Recap
+1. **Create business:** `/onboarding` → domain createBusiness (region-scoped) → redirect to `/dashboard/<slug>`.
+2. **Dashboard view:** `/dashboard/<slug>` → `getDashboardData` loads metrics + appointments/customers under the same region.
+3. **Customer booking:** `/<slug>/book` → `getBookingContext` + `BookingFlow` → server action `createBookingAction` (customer + appointment).
+4. **AI agent:** POST to `/api/ai/concierge` with `{ "type": "createAppointment", payload: { ... } }` (or import `agentRouter` server-side) to automate operations.
 
-1. Set env vars + run dev server.
-2. Use the onboarding form to create a business (writes to Supabase).
-3. Hit `/api/businesses` or `/api/ai/concierge` to observe domain + agent layers working together.
+## Scripts
+- `npm run dev` – Start Next.js in dev mode.
+- `npm run build` – Build for production.
+- `npm run start` – Start production build.
+- `npm run lint` – ESLint (Next config).
+
+With this scaffold you can roll out a new regional instance by cloning the Supabase project, adjusting four env vars, and redeploying—TimeBookt v2 keeps multi-tenant, agent-ready guarantees baked in from the start.

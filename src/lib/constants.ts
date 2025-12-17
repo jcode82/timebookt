@@ -5,7 +5,8 @@ export const BUSINESS_BOOKING_SEGMENT = "book";
 export const DEFAULT_BOOKING_WINDOW_DAYS = 120;
 export const DEFAULT_CANCELLATION_WINDOW_HOURS = 4;
 export const DEFAULT_TIMEZONE = "America/New_York";
-export const DEMO_BUSINESS_SLUG = "demo-spa-nyc";
+// export const DEMO_BUSINESS_SLUG = "demo-spa-nyc";
+export const DEMO_BUSINESS_SLUG = "miami-apt-cleaning-fl";
 
 export const TABLES = {
   businesses: "businesses",

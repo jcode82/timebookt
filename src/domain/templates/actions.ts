@@ -1,8 +1,9 @@
 import { TABLES } from "@/lib/constants";
 import { DomainError } from "@/lib/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
-import type { Tables, TablesInsert } from "../../../supabase/types";
-import type { TemplateInput, TemplateRecord } from "./types";
+import { REGION } from "@/lib/env";
+import type { Tables, TablesInsert, TablesUpdate } from "../../../supabase/types";
+import type { TemplateInput, TemplateRecord, UpdateTemplateInput } from "./types";
 
 const mapTemplate = (row: Tables<typeof TABLES.templates>): TemplateRecord => ({
   id: row.id,
@@ -21,6 +22,7 @@ export async function createTemplate(input: TemplateInput): Promise<TemplateReco
   const supabase = getSupabaseAdmin();
   const payload: TablesInsert<typeof TABLES.templates> = {
     business_id: input.businessId,
+    region_code: REGION,
     slug: input.slug,
     channel: input.channel,
     name: input.name,
@@ -48,6 +50,7 @@ export async function listTemplates(businessId: string): Promise<TemplateRecord[
     .from(TABLES.templates)
     .select()
     .eq("business_id", businessId)
+    .eq("region_code", REGION)
     .order("updated_at", { ascending: false });
 
   if (error) {
@@ -66,6 +69,7 @@ export async function getTemplateBySlug(
     .from(TABLES.templates)
     .select()
     .eq("business_id", businessId)
+    .eq("region_code", REGION)
     .eq("slug", slug)
     .maybeSingle();
 
@@ -74,4 +78,29 @@ export async function getTemplateBySlug(
   }
 
   return data ? mapTemplate(data) : null;
+}
+
+export async function updateTemplate(input: UpdateTemplateInput): Promise<TemplateRecord> {
+  const supabase = getSupabaseAdmin();
+  const payload: TablesUpdate<typeof TABLES.templates> = {};
+
+  if (typeof input.name !== "undefined") payload.name = input.name;
+  if (typeof input.subject !== "undefined") payload.subject = input.subject;
+  if (typeof input.body !== "undefined") payload.body = input.body;
+  if (typeof input.locale !== "undefined") payload.locale = input.locale;
+
+  const { data, error } = await supabase
+    .from(TABLES.templates)
+    .update(payload)
+    .eq("id", input.templateId)
+    .eq("business_id", input.businessId)
+    .eq("region_code", REGION)
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new DomainError("Unable to update template", { error, input });
+  }
+
+  return mapTemplate(data);
 }

@@ -2,8 +2,9 @@ import { DASHBOARD_LIMITS, DEFAULT_BOOKING_WINDOW_DAYS, DEFAULT_CANCELLATION_WIN
 import { DomainError } from "@/lib/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
 import { toSlug } from "@/lib/utils/slug";
+import { REGION } from "@/lib/env";
 import type { Tables, TablesInsert } from "../../../supabase/types";
-import type { BusinessDashboardMetrics, BusinessProfile, BusinessSettings, CreateBusinessPayload } from "./types";
+import type { BusinessDashboardMetrics, BusinessProfile, BusinessSettings, CreateBusinessInput } from "./types";
 
 const defaultSettings = (timezone: string): BusinessSettings => ({
   bookingWindowDays: DEFAULT_BOOKING_WINDOW_DAYS,
@@ -29,15 +30,21 @@ const mapBusiness = (row: Tables<typeof TABLES.businesses>): BusinessProfile => 
   updatedAt: row.updated_at,
 });
 
-export async function createBusiness(payload: CreateBusinessPayload): Promise<BusinessProfile> {
+export async function createBusiness(payload: CreateBusinessInput): Promise<BusinessProfile> {
   const supabase = getSupabaseAdmin();
+  if (payload.regionCode !== REGION) {
+    throw new DomainError("Region mismatch during business creation", {
+      requestedRegion: payload.regionCode,
+      region: REGION,
+    });
+  }
   const slug = `${toSlug(payload.name)}-${toSlug(payload.regionCode)}`;
 
   const insert: TablesInsert<typeof TABLES.businesses> = {
     slug,
     name: payload.name,
     description: payload.description,
-    region_code: payload.regionCode,
+    region_code: REGION,
     timezone: payload.timezone,
     contact_email: payload.contactEmail,
     contact_phone: payload.contactPhone,
@@ -63,6 +70,7 @@ export async function getBusinessBySlug(slug: string): Promise<BusinessProfile |
     .from(TABLES.businesses)
     .select()
     .eq("slug", slug)
+    .eq("region_code", REGION)
     .maybeSingle();
 
   if (error) {
@@ -78,6 +86,7 @@ export async function listBusinessesByRegion(regionCode: string): Promise<Busine
     .from(TABLES.businesses)
     .select()
     .eq("region_code", regionCode)
+    .eq("region_code", REGION)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -93,21 +102,25 @@ export async function getBusinessDashboardMetrics(businessId: string): Promise<B
     supabase
       .from(TABLES.appointments)
       .select("id", { count: "exact", head: true })
-      .eq("business_id", businessId),
+      .eq("business_id", businessId)
+      .eq("region_code", REGION),
     supabase
       .from(TABLES.appointments)
       .select("id", { count: "exact", head: true })
       .eq("business_id", businessId)
       .eq("status", "scheduled")
+      .eq("region_code", REGION)
       .gte("start_time", new Date().toISOString()),
     supabase
       .from(TABLES.customers)
       .select("id", { count: "exact", head: true })
-      .eq("business_id", businessId),
+      .eq("business_id", businessId)
+      .eq("region_code", REGION),
     supabase
       .from(TABLES.auditLogs)
       .select("id, action, created_at")
       .eq("business_id", businessId)
+      .eq("region_code", REGION)
       .order("created_at", { ascending: false })
       .limit(DASHBOARD_LIMITS.auditLogs),
   ]);

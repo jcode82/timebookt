@@ -15,7 +15,7 @@ export interface Database {
           slug: string;
           name: string;
           description: string | null;
-          region_code: string | null;
+          region_code: string;
           timezone: string;
           contact_email: string;
           contact_phone: string | null;
@@ -28,7 +28,7 @@ export interface Database {
           slug: string;
           name: string;
           description?: string | null;
-          region_code?: string | null;
+          region_code?: string;
           timezone?: string;
           contact_email: string;
           contact_phone?: string | null;
@@ -42,6 +42,7 @@ export interface Database {
         Row: {
           id: string;
           business_id: string;
+          region_code: string;
           full_name: string;
           email: string | null;
           phone: string | null;
@@ -52,6 +53,7 @@ export interface Database {
         Insert: {
           id?: string;
           business_id: string;
+          region_code?: string;
           full_name: string;
           email?: string | null;
           phone?: string | null;
@@ -65,6 +67,7 @@ export interface Database {
         Row: {
           id: string;
           business_id: string;
+          region_code: string;
           name: string;
           description: string | null;
           duration_minutes: number;
@@ -77,6 +80,7 @@ export interface Database {
         Insert: {
           id?: string;
           business_id: string;
+          region_code?: string;
           name: string;
           description?: string | null;
           duration_minutes: number;
@@ -92,6 +96,7 @@ export interface Database {
         Row: {
           id: string;
           business_id: string;
+          region_code: string;
           full_name: string;
           email: string;
           phone: string | null;
@@ -102,6 +107,7 @@ export interface Database {
         Insert: {
           id?: string;
           business_id: string;
+          region_code?: string;
           full_name: string;
           email: string;
           phone?: string | null;
@@ -116,6 +122,7 @@ export interface Database {
           id: string;
           business_id: string;
           staff_id: string | null;
+          region_code: string;
           day_of_week: number;
           start_time: string;
           end_time: string;
@@ -126,6 +133,7 @@ export interface Database {
           id?: string;
           business_id: string;
           staff_id?: string | null;
+          region_code?: string;
           day_of_week: number;
           start_time: string;
           end_time: string;
@@ -141,6 +149,7 @@ export interface Database {
           customer_id: string;
           service_id: string;
           staff_id: string | null;
+          region_code: string;
           start_time: string;
           end_time: string;
           status: string;
@@ -155,6 +164,7 @@ export interface Database {
           customer_id: string;
           service_id: string;
           staff_id?: string | null;
+          region_code?: string;
           start_time: string;
           end_time: string;
           status?: string;
@@ -169,6 +179,7 @@ export interface Database {
         Row: {
           id: string;
           business_id: string;
+          region_code: string;
           slug: string;
           channel: string;
           name: string;
@@ -181,6 +192,7 @@ export interface Database {
         Insert: {
           id?: string;
           business_id: string;
+          region_code?: string;
           slug: string;
           channel: string;
           name: string;
@@ -196,6 +208,7 @@ export interface Database {
         Row: {
           id: string;
           business_id: string;
+          region_code: string;
           actor_type: string;
           actor_id: string | null;
           action: string;
@@ -205,6 +218,7 @@ export interface Database {
         Insert: {
           id?: string;
           business_id: string;
+          region_code?: string;
           actor_type: string;
           actor_id?: string | null;
           action: string;

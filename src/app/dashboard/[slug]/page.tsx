@@ -1,4 +1,4 @@
-import { DEMO_BUSINESS_SLUG } from "@/lib/constants";
+import { notFound } from "next/navigation";
 import { getDashboardData } from "@/features/dashboard/api/getDashboardData";
 import { DashboardHeader } from "@/features/dashboard/components/DashboardHeader";
 import { MetricsGrid } from "@/features/dashboard/components/MetricsGrid";
@@ -7,13 +7,16 @@ import { CustomersPanel } from "@/features/dashboard/components/CustomersPanel";
 import { AuditLogPanel } from "@/features/dashboard/components/AuditLogPanel";
 
 interface DashboardPageProps {
-  searchParams?: Record<string, string | string[]>;
+  params: Promise<{ slug: string }>;
 }
 
-export default async function DashboardPage({ searchParams }: DashboardPageProps) {
-  const slugParam = typeof searchParams?.business === "string" ? searchParams?.business : undefined;
-  const slug = slugParam ?? DEMO_BUSINESS_SLUG;
+export default async function DashboardPage({ params }: DashboardPageProps) {
+  const { slug } = await params;
   const data = await getDashboardData(slug);
+
+  if (!data) {
+    notFound();
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-12">

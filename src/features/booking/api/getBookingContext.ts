@@ -8,7 +8,7 @@ import { getAvailability } from "@/domain/appointments";
 export async function getBookingContext(slug: string) {
   const business = await getBusinessBySlug(slug);
   if (!business) {
-    throw new Error(`Business not found for slug ${slug}`);
+    return null;
   }
 
   const [services, availability] = await Promise.all([

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, DEMO_BUSINESS_SLUG } from "@/lib/constants";
 import type { HeroMetricsResult } from "@/features/home/api/getHeroMetrics";
 
 interface HeroSectionProps {
@@ -29,7 +29,7 @@ export function HeroSection({ metrics }: HeroSectionProps) {
           Start business onboarding
         </Link>
         <Link
-          href="/dashboard"
+          href={`/dashboard/${DEMO_BUSINESS_SLUG}`}
           className="rounded-full border border-white/30 px-6 py-3 text-center text-white transition hover:border-white/60"
         >
           View admin console

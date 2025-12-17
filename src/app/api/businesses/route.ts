@@ -10,7 +10,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const payload = await request.json();
-  const business = await createBusiness(payload);
-  return NextResponse.json(business, { status: 201 });
+  try {
+    const payload = await request.json();
+    const business = await createBusiness(payload);
+    return NextResponse.json(business, { status: 201 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to create business";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 }

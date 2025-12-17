@@ -1,14 +1,22 @@
+import { notFound } from "next/navigation";
 import { getBookingContext } from "@/features/booking/api/getBookingContext";
 import { BookingHeader } from "@/features/booking/components/BookingHeader";
 import { BookingFlow } from "@/features/booking/components/BookingFlow";
 import { BookingSidebar } from "@/features/booking/components/BookingSidebar";
 
 interface BookingPageProps {
-  params: { businessSlug: string };
+  params: Promise<{ businessSlug: string }>;
 }
 
 export default async function BookingPage({ params }: BookingPageProps) {
-  const { business, services, availability } = await getBookingContext(params.businessSlug);
+  const { businessSlug } = await params;
+  const context = await getBookingContext(businessSlug);
+
+  if (!context) {
+    notFound();
+  }
+
+  const { business, services, availability } = context;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-12">
