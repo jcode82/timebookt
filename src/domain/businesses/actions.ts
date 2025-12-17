@@ -64,7 +64,7 @@ export async function createBusiness(payload: CreateBusinessInput): Promise<Busi
     timezone: payload.timezone,
     contact_email: payload.contactEmail,
     contact_phone: payload.contactPhone,
-    settings: defaultSettings() as TablesInsert<typeof TABLES.businesses>["settings"],
+    settings: defaultSettings() as unknown as TablesInsert<typeof TABLES.businesses>["settings"],
   };
 
   const { data, error } = await supabase
