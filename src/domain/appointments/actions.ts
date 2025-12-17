@@ -1,8 +1,8 @@
-import { DASHBOARD_LIMITS, TABLES } from "@/lib/constants";
+import { DASHBOARD_LIMITS } from "@/lib/constants";
 import { DomainError } from "@/lib/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
 import { REGION } from "@/lib/env";
-import type { Tables, TablesInsert, TablesUpdate } from "../../../supabase/types";
+import type { Database, Tables, TablesInsert, TablesUpdate } from "../../../supabase/types";
 import type {
   AppointmentRecord,
   AvailabilityBlock,
@@ -11,8 +11,11 @@ import type {
   CreateAppointmentInput,
 } from "./types";
 
-type AppointmentsTable = "appointments";
-type AvailabilityTable = "availability_blocks";
+const APPOINTMENTS_TABLE = "appointments" as const satisfies keyof Database["public"]["Tables"];
+const AVAILABILITY_TABLE = "availability_blocks" as const satisfies keyof Database["public"]["Tables"];
+
+type AppointmentsTable = typeof APPOINTMENTS_TABLE;
+type AvailabilityTable = typeof AVAILABILITY_TABLE;
 
 const mapAppointment = (row: Tables<AppointmentsTable>): AppointmentRecord => ({
   id: row.id,
@@ -54,7 +57,7 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
   };
 
   const { data, error } = await supabase
-    .from(TABLES.appointments)
+    .from(APPOINTMENTS_TABLE)
     .insert(payload)
     .select()
     .single();
@@ -75,7 +78,7 @@ export async function cancelAppointment(input: CancelAppointmentInput): Promise<
   };
 
   const { data, error } = await supabase
-    .from(TABLES.appointments)
+    .from(APPOINTMENTS_TABLE)
     .update(payload)
     .eq("id", input.appointmentId)
     .eq("region_code", REGION)
@@ -95,7 +98,7 @@ export async function listAppointmentsForBusiness(
 ): Promise<AppointmentRecord[]> {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
-    .from(TABLES.appointments)
+    .from(APPOINTMENTS_TABLE)
     .select()
     .eq("business_id", businessId)
     .eq("region_code", REGION)
@@ -114,7 +117,7 @@ export async function getAvailability(
 ): Promise<AvailabilityBlock[]> {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
-    .from(TABLES.availabilityBlocks)
+    .from(AVAILABILITY_TABLE)
     .select()
     .eq("business_id", request.businessId)
     .eq("region_code", REGION)
