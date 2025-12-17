@@ -11,6 +11,9 @@ import type {
   CreateAppointmentInput,
 } from "./types";
 
+const APPOINTMENTS_TABLE = "appointments" as const;
+const AVAILABILITY_TABLE = "availability_blocks" as const;
+
 const mapAppointment = (row: Tables<"appointments">): AppointmentRecord => ({
   id: row.id,
   businessId: row.business_id,
@@ -51,7 +54,7 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
   };
 
   const { data, error } = await supabase
-    .from("appointments")
+    .from(APPOINTMENTS_TABLE)
     .insert(payload)
     .select()
     .single();
@@ -72,7 +75,7 @@ export async function cancelAppointment(input: CancelAppointmentInput): Promise<
   };
 
   const { data, error } = await supabase
-    .from("appointments")
+    .from(APPOINTMENTS_TABLE)
     .update(payload)
     .eq("id", input.appointmentId)
     .eq("region_code", REGION)
@@ -92,7 +95,7 @@ export async function listAppointmentsForBusiness(
 ): Promise<AppointmentRecord[]> {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
-    .from("appointments")
+    .from(APPOINTMENTS_TABLE)
     .select()
     .eq("business_id", businessId)
     .eq("region_code", REGION)
@@ -111,7 +114,7 @@ export async function getAvailability(
 ): Promise<AvailabilityBlock[]> {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
-    .from("availability_blocks")
+    .from(AVAILABILITY_TABLE)
     .select()
     .eq("business_id", request.businessId)
     .eq("region_code", REGION)
