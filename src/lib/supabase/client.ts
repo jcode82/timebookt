@@ -17,7 +17,7 @@ const buildClient = (
     },
   });
 
-export const getSupabaseAdmin = cache(() => {
+export const getSupabaseAdmin = cache((): SupabaseClient<Database> => {
   if (!env.supabaseServiceRoleKey) {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for server actions");
   }
