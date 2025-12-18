@@ -1,4 +1,4 @@
-import { cache } from "react";
+// import { cache } from "react";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../../supabase/types";
 import { env } from "@/lib/env";
