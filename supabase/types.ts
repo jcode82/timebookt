@@ -227,9 +227,96 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["audit_logs"]["Insert"]>;
       };
+      waitlist: {
+        Row: {
+          id: string;
+          email: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          email: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["waitlist"]["Insert"]>;
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      cancel_appointment: {
+        Args: {
+          appointment_id: string;
+          region_code: string;
+          cancellation_reason?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["appointments"]["Row"];
+      };
+      create_appointment: {
+        Args: {
+          business_id: string;
+          customer_id: string;
+          service_id: string;
+          region_code: string;
+          start_time: string;
+          end_time: string;
+          staff_id?: string | null;
+          notes?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["appointments"]["Row"];
+      };
+      create_business: {
+        Args: {
+          slug: string;
+          name: string;
+          region_code: string;
+          timezone: string;
+          contact_email: string;
+          description?: string | null;
+          contact_phone?: string | null;
+          settings?: Json;
+        };
+        Returns: Database["public"]["Tables"]["businesses"]["Row"];
+      };
+      create_customer: {
+        Args: {
+          business_id: string;
+          region_code: string;
+          full_name: string;
+          email: string;
+          phone?: string | null;
+          locale?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["customers"]["Row"];
+      };
+      create_template: {
+        Args: {
+          business_id: string;
+          region_code: string;
+          slug: string;
+          channel: string;
+          name: string;
+          body: string;
+          locale: string;
+          subject?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["templates"]["Row"];
+      };
+      update_template: {
+        Args: {
+          template_id: string;
+          business_id: string;
+          region_code: string;
+          patch?: Json;
+        };
+        Returns: Database["public"]["Tables"]["templates"]["Row"];
+      };
+      create_waitlist_entry: {
+        Args: {
+          email: string;
+        };
+        Returns: Database["public"]["Tables"]["waitlist"]["Row"];
+      };
+    };
     Enums: Record<string, never>;
   };
 };

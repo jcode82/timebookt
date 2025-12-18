@@ -1,6 +1,7 @@
 import { DASHBOARD_LIMITS, DEFAULT_BOOKING_WINDOW_DAYS, DEFAULT_CANCELLATION_WINDOW_HOURS, TABLES } from "@/lib/constants";
 import { DomainError } from "@/lib/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
+import { rpcCall } from "@/lib/supabase/rpc";
 import { toSlug } from "@/lib/utils/slug";
 import { REGION } from "@/lib/env";
 import type { Tables, TablesInsert } from "../../../supabase/types";
@@ -67,11 +68,16 @@ export async function createBusiness(payload: CreateBusinessInput): Promise<Busi
     settings: defaultSettings() as unknown as TablesInsert<typeof TABLES.businesses>["settings"],
   };
 
-  const { data, error } = await supabase
-    .from(TABLES.businesses)
-    .insert(insert)
-    .select()
-    .single();
+  const { data, error } = await rpcCall<Tables<typeof TABLES.businesses>>(supabase, "create_business", {
+    slug: insert.slug,
+    name: insert.name,
+    description: insert.description ?? null,
+    region_code: insert.region_code ?? REGION,
+    timezone: insert.timezone,
+    contact_email: insert.contact_email,
+    contact_phone: insert.contact_phone ?? null,
+    settings: insert.settings,
+  });
 
   if (error || !data) {
     throw new DomainError("Unable to create business", { error });

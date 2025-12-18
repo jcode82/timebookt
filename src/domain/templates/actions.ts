@@ -1,8 +1,9 @@
 import { TABLES } from "@/lib/constants";
 import { DomainError } from "@/lib/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
+import { rpcCall } from "@/lib/supabase/rpc";
 import { REGION } from "@/lib/env";
-import type { Tables, TablesInsert, TablesUpdate } from "../../../supabase/types";
+import type { Json, Tables, TablesInsert, TablesUpdate } from "../../../supabase/types";
 import type { TemplateInput, TemplateRecord, UpdateTemplateInput } from "./types";
 
 const mapTemplate = (row: Tables<typeof TABLES.templates>): TemplateRecord => ({
@@ -31,11 +32,20 @@ export async function createTemplate(input: TemplateInput): Promise<TemplateReco
     locale: input.locale,
   };
 
-  const { data, error } = await supabase
-    .from(TABLES.templates)
-    .insert(payload)
-    .select()
-    .single();
+  const { data, error } = await rpcCall<Tables<typeof TABLES.templates>>(
+    supabase,
+    "create_template",
+    {
+      business_id: payload.business_id,
+      region_code: payload.region_code ?? REGION,
+      slug: payload.slug,
+      channel: payload.channel,
+      name: payload.name,
+      subject: payload.subject ?? null,
+      body: payload.body,
+      locale: payload.locale,
+    },
+  );
 
   if (error || !data) {
     throw new DomainError("Unable to create template", { error, input });
@@ -89,14 +99,12 @@ export async function updateTemplate(input: UpdateTemplateInput): Promise<Templa
   if (typeof input.body !== "undefined") payload.body = input.body;
   if (typeof input.locale !== "undefined") payload.locale = input.locale;
 
-  const { data, error } = await supabase
-    .from(TABLES.templates)
-    .update(payload)
-    .eq("id", input.templateId)
-    .eq("business_id", input.businessId)
-    .eq("region_code", REGION)
-    .select()
-    .single();
+  const { data, error } = await rpcCall<Tables<typeof TABLES.templates>>(supabase, "update_template", {
+    template_id: input.templateId,
+    business_id: input.businessId,
+    region_code: REGION,
+    patch: payload as Json,
+  });
 
   if (error || !data) {
     throw new DomainError("Unable to update template", { error, input });

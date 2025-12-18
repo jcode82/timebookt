@@ -1,6 +1,7 @@
 import { TABLES } from "@/lib/constants";
 import { DomainError } from "@/lib/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
+import { rpcCall } from "@/lib/supabase/rpc";
 import { REGION } from "@/lib/env";
 import type { Tables, TablesInsert } from "../../../supabase/types";
 import type { CreateCustomerInput, CustomerFilter, CustomerProfile } from "./types";
@@ -27,11 +28,14 @@ export async function createCustomer(input: CreateCustomerInput): Promise<Custom
     locale: input.locale,
   };
 
-  const { data, error } = await supabase
-    .from(TABLES.customers)
-    .insert(insert)
-    .select()
-    .single();
+  const { data, error } = await rpcCall<Tables<typeof TABLES.customers>>(supabase, "create_customer", {
+    business_id: insert.business_id,
+    region_code: insert.region_code ?? REGION,
+    full_name: insert.full_name,
+    email: insert.email,
+    phone: insert.phone ?? null,
+    locale: insert.locale ?? null,
+  });
 
   if (error || !data) {
     throw new DomainError("Unable to create customer", { error });

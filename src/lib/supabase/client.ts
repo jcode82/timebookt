@@ -17,7 +17,7 @@ const buildClient = (
     },
   });
 
-export const getSupabaseAdmin = cache((): SupabaseClient<Database> => {
+export const getSupabaseAdmin = (): SupabaseClient<Database> => {
   if (!env.supabaseServiceRoleKey) {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for server actions");
   }
@@ -25,7 +25,8 @@ export const getSupabaseAdmin = cache((): SupabaseClient<Database> => {
     adminSingleton = buildClient(env.supabaseServiceRoleKey);
   }
   return adminSingleton;
-});
+};
+
 
 export const getSupabaseBrowserClient = () => {
   if (!anonSingleton) {

@@ -1,6 +1,7 @@
 import { DASHBOARD_LIMITS } from "@/lib/constants";
 import { DomainError } from "@/lib/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
+import { rpcCall } from "@/lib/supabase/rpc";
 import { REGION } from "@/lib/env";
 import type { Tables, TablesInsert, TablesUpdate } from "../../../supabase/types";
 import type {
@@ -11,8 +12,8 @@ import type {
   CreateAppointmentInput,
 } from "./types";
 
-const APPOINTMENTS_TABLE = "appointments" as const;
-const AVAILABILITY_TABLE = "availability_blocks" as const;
+// const APPOINTMENTS_TABLE = "appointments" as const;
+// const AVAILABILITY_TABLE = "availability_blocks" as const;
 
 const mapAppointment = (row: Tables<"appointments">): AppointmentRecord => ({
   id: row.id,
@@ -53,11 +54,16 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
     notes: input.notes,
   };
 
-  const { data, error } = await supabase
-    .from(APPOINTMENTS_TABLE)
-    .insert(payload)
-    .select()
-    .single();
+  const { data, error } = await rpcCall<Tables<"appointments">>(supabase, "create_appointment", {
+    business_id: payload.business_id,
+    customer_id: payload.customer_id,
+    service_id: payload.service_id,
+    staff_id: payload.staff_id ?? null,
+    region_code: payload.region_code ?? REGION,
+    start_time: payload.start_time,
+    end_time: payload.end_time,
+    notes: payload.notes ?? null,
+  });
 
   if (error || !data) {
     throw new DomainError("Unable to create appointment", { error, input });
@@ -74,13 +80,11 @@ export async function cancelAppointment(input: CancelAppointmentInput): Promise<
     cancellation_reason: input.cancellationReason ?? "canceled-by-admin",
   };
 
-  const { data, error } = await supabase
-    .from(APPOINTMENTS_TABLE)
-    .update(payload)
-    .eq("id", input.appointmentId)
-    .eq("region_code", REGION)
-    .select()
-    .single();
+  const { data, error } = await rpcCall<Tables<"appointments">>(supabase, "cancel_appointment", {
+    appointment_id: input.appointmentId,
+    region_code: REGION,
+    cancellation_reason: payload.cancellation_reason,
+  });
 
   if (error || !data) {
     throw new DomainError("Unable to cancel appointment", { error, input });
@@ -95,7 +99,7 @@ export async function listAppointmentsForBusiness(
 ): Promise<AppointmentRecord[]> {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
-    .from(APPOINTMENTS_TABLE)
+    .from("appointments")
     .select()
     .eq("business_id", businessId)
     .eq("region_code", REGION)
@@ -114,7 +118,7 @@ export async function getAvailability(
 ): Promise<AvailabilityBlock[]> {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
-    .from(AVAILABILITY_TABLE)
+    .from("availability_blocks")
     .select()
     .eq("business_id", request.businessId)
     .eq("region_code", REGION)

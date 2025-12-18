@@ -14,7 +14,11 @@ export async function joinWaitlistAction(rawEmail: string) {
   }
 
   const supabase = getSupabaseAdmin();
-  const { error } = await supabase.from("waitlist").insert({ email: parsed.data.email });
+  const { error } = await supabase.rpc(
+    "create_waitlist_entry",
+    { email: parsed.data.email },
+    { count: "exact" },
+  );
 
   if (error) {
     if (error.code === "23505") {
