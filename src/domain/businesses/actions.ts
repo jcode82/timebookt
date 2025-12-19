@@ -156,11 +156,13 @@ export async function getBusinessDashboardMetrics(businessId: string): Promise<B
     });
   }
 
+  const auditLogRows = (auditLogRes.data ?? []) as Tables<typeof TABLES.auditLogs>[];
+
   return {
     totalAppointments: totalRes.count ?? 0,
     upcomingAppointments: upcomingRes.count ?? 0,
     activeCustomers: customersRes.count ?? 0,
-    recentAuditLog: (auditLogRes.data ?? []).map((log) => ({
+    recentAuditLog: auditLogRows.map((log) => ({
       id: log.id,
       action: log.action,
       createdAt: log.created_at,
