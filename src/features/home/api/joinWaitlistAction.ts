@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
+import { rpcCall } from "@/lib/supabase/rpc";
 
 const waitlistSchema = z.object({
   email: z.string().email(),
@@ -14,11 +15,7 @@ export async function joinWaitlistAction(rawEmail: string) {
   }
 
   const supabase = getSupabaseAdmin();
-  const { error } = await supabase.rpc(
-    "create_waitlist_entry",
-    { email: parsed.data.email },
-    { count: "exact" },
-  );
+  const { error } = await rpcCall(supabase, "create_waitlist_entry", { email: parsed.data.email });
 
   if (error) {
     if (error.code === "23505") {
