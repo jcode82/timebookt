@@ -1,61 +1,47 @@
-"use client"; // Needed since it handles form submission
+"use client";
 
-import { useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { useState, useTransition } from "react";
+import { joinWaitlistAction } from "@/features/home/api/joinWaitlistAction";
 
 export default function WaitlistForm() {
   const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setMessage("");
-
-    type WaitlistInsert = {email: string;};
-
-    const { error } = await supabase.from("waitlist").insert([{ email }] as WaitlistInsert[]);
-
-    if (error) {
-      console.error("Supabase insert error:", error);
-
-      // Supabase will send a Postgres error when UNIQUE constraint is violated
-      if (error.code === "23505") {
-        // 23505 = unique_violation
-        setMessage("You're already on the waitlist!");
-      } else {
-        setMessage("Something went wrong. Please try again.");
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    startTransition(async () => {
+      setMessage(null);
+      try {
+        await joinWaitlistAction(email);
+        setEmail("");
+        setMessage("🎉 Thanks for joining the beta!");
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Something went wrong. Please try again.");
       }
-    } else {
-      setMessage("🎉 Thanks for joining the beta!");
-      setEmail("");
-    }
-
-    setLoading(false);
-  }
+    });
+  };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="flex flex-col sm:flex-row gap-3 w-full max-w-md"
-    >
-      <input
-        type="email"
-        placeholder="Enter your email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        required
-        className="flex-1 rounded-xl px-4 py-3 border border-gray-300 focus:ring-2 focus:ring-[#3BAFDA] focus:outline-none"
-      />
-      <button
-        type="submit"
-        disabled={loading}
-        className="bg-[#3DDC97] hover:bg-[#3BAFDA] text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-md disabled:opacity-50"
-      >
-        {loading ? "Joining..." : "Join the Beta"}
-      </button>
-      {message && <p className="text-sm text-gray-600 mt-2">{message}</p>}
+    <form onSubmit={handleSubmit} className="w-full max-w-2xl">
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <input
+          type="email"
+          placeholder="you@business.com"
+          className="w-full flex-1 rounded-full border border-white/20 bg-transparent px-5 py-3 text-sm placeholder:text-slate-400 focus:border-white/60 focus:outline-none"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          required
+        />
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-slate-900 transition disabled:opacity-60"
+        >
+          {pending ? "Joining..." : "Join the waitlist"}
+        </button>
+      </div>
+      {message && <p className="mt-3 text-sm text-slate-300">{message}</p>}
     </form>
   );
 }
