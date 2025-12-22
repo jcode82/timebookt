@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createAppointment, listAppointmentsForBusiness } from "@/domain/appointments";
+import { createCanonicalAppointment, listAppointmentsForBusiness } from "@/domain/appointments";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const payload = await request.json();
-    const appointment = await createAppointment(payload);
+    const appointment = await createCanonicalAppointment(payload);
     return NextResponse.json(appointment, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to create appointment";

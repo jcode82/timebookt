@@ -1,22 +1,22 @@
 import {
   cancelAppointment,
-  createAppointment,
+  createCanonicalAppointment,
   getAvailability,
   listAppointmentsForBusiness,
   type AppointmentRecord,
   type AvailabilityBlock,
   type AvailabilityRequest,
   type CancelAppointmentInput,
-  type CreateAppointmentInput,
+  type CanonicalAppointmentInput,
 } from "@/domain/appointments";
 
-export type CreateAppointmentAgentInput = CreateAppointmentInput;
+export type CreateAppointmentAgentInput = CanonicalAppointmentInput;
 export type CreateAppointmentAgentOutput = AppointmentRecord;
 
 export async function createAppointmentAgentHook(
   input: CreateAppointmentAgentInput,
 ): Promise<CreateAppointmentAgentOutput> {
-  return createAppointment(input);
+  return createCanonicalAppointment(input);
 }
 
 export async function cancelAppointmentAgentHook(
