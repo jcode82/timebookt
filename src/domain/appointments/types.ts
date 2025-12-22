@@ -25,6 +25,18 @@ export interface CreateAppointmentInput {
   notes?: string;
 }
 
+export interface CanonicalAppointmentInput {
+  serviceId: string;
+  providerId: string;
+  regionCode: string;
+  startTime: string;
+  endTime: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+  notes?: string;
+}
+
 export interface CancelAppointmentInput {
   appointmentId: string;
   cancellationReason?: string;

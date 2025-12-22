@@ -63,10 +63,15 @@ export function BookingFlow({ businessId, businessSlug, services, availability }
     if (!selectedService || !selectedBlock) {
       return;
     }
+    if (!selectedBlock.staffId) {
+      setFeedback("Please select a provider for this slot.");
+      return;
+    }
     startTransition(async () => {
       await createBookingAction({
         businessId,
         businessSlug,
+        providerId: selectedBlock.staffId ?? "",
         serviceId: selectedService.id,
         startTime: selectedBlock.startTime,
         endTime: selectedBlock.endTime,
