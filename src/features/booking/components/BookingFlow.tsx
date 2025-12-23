@@ -1,22 +1,33 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import type { AvailabilityBlock } from "@/domain/appointments";
+import type { ProviderAvailabilitySlot } from "@/domain/appointments";
 import type { ServiceRecord } from "@/domain/services";
 import { BOOKING_STEPS } from "@/lib/constants";
 import { createBookingAction } from "@/features/booking/api/createBookingAction";
+import { getProviderAvailabilityAction } from "@/features/booking/api/getProviderAvailabilityAction";
+
+interface ProviderOption {
+  id: string;
+  name: string;
+}
 
 interface BookingFlowProps {
   businessId: string;
   businessSlug: string;
   services: ServiceRecord[];
-  availability: AvailabilityBlock[];
+  providers: ProviderOption[];
 }
 
-export function BookingFlow({ businessId, businessSlug, services, availability }: BookingFlowProps) {
+const formatDateInput = (value: Date) => value.toISOString().slice(0, 10);
+
+export function BookingFlow({ businessId, businessSlug, services, providers }: BookingFlowProps) {
   const [step, setStep] = useState<(typeof BOOKING_STEPS)[number]>(BOOKING_STEPS[0]);
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
-  const [selectedBlock, setSelectedBlock] = useState<AvailabilityBlock | null>(null);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(services[0]?.id ?? null);
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(providers[0]?.id ?? null);
+  const [selectedDate, setSelectedDate] = useState<string>(formatDateInput(new Date()));
+  const [slots, setSlots] = useState<ProviderAvailabilitySlot[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<ProviderAvailabilitySlot | null>(null);
   const [formState, setFormState] = useState({
     customerName: "",
     customerEmail: "",
@@ -31,12 +42,27 @@ export function BookingFlow({ businessId, businessSlug, services, availability }
     [selectedServiceId, services],
   );
 
+  const selectedProvider = useMemo(
+    () => providers.find((provider) => provider.id === selectedProviderId) ?? null,
+    [providers, selectedProviderId],
+  );
+
+  const fetchSlots = (providerId: string, date: string) => {
+    startTransition(async () => {
+      const result = await getProviderAvailabilityAction({ providerId, date });
+      setSlots(result);
+      setSelectedSlot(result[0] ?? null);
+    });
+  };
+
   const canAdvance = () => {
     switch (step) {
       case "selectService":
         return Boolean(selectedServiceId);
+      case "selectProvider":
+        return Boolean(selectedProviderId);
       case "selectSlot":
-        return Boolean(selectedBlock);
+        return Boolean(selectedSlot);
       case "confirm":
         return Boolean(formState.customerName && formState.customerEmail);
       default:
@@ -48,7 +74,11 @@ export function BookingFlow({ businessId, businessSlug, services, availability }
     if (!canAdvance()) return;
     const idx = BOOKING_STEPS.indexOf(step);
     if (idx < BOOKING_STEPS.length - 1) {
-      setStep(BOOKING_STEPS[idx + 1]);
+      const nextStep = BOOKING_STEPS[idx + 1];
+      setStep(nextStep);
+      if (nextStep === "selectSlot" && selectedProviderId) {
+        fetchSlots(selectedProviderId, selectedDate);
+      }
     }
   };
 
@@ -60,21 +90,17 @@ export function BookingFlow({ businessId, businessSlug, services, availability }
   };
 
   const submitBooking = () => {
-    if (!selectedService || !selectedBlock) {
-      return;
-    }
-    if (!selectedBlock.staffId) {
-      setFeedback("Please select a provider for this slot.");
+    if (!selectedService || !selectedProvider || !selectedSlot) {
       return;
     }
     startTransition(async () => {
       await createBookingAction({
         businessId,
         businessSlug,
-        providerId: selectedBlock.staffId ?? "",
+        providerId: selectedProvider.id,
         serviceId: selectedService.id,
-        startTime: selectedBlock.startTime,
-        endTime: selectedBlock.endTime,
+        startTime: selectedSlot.startTime,
+        endTime: selectedSlot.endTime,
         customerName: formState.customerName,
         customerEmail: formState.customerEmail,
         customerPhone: formState.customerPhone,
@@ -82,8 +108,10 @@ export function BookingFlow({ businessId, businessSlug, services, availability }
       });
       setFeedback("Appointment scheduled. Check your email for confirmation.");
       setStep(BOOKING_STEPS[0]);
-      setSelectedServiceId(null);
-      setSelectedBlock(null);
+      setSelectedServiceId(services[0]?.id ?? null);
+      setSelectedProviderId(providers[0]?.id ?? null);
+      setSelectedSlot(null);
+      setSlots([]);
       setFormState({ customerName: "", customerEmail: "", customerPhone: "", notes: "" });
     });
   };
@@ -108,37 +136,92 @@ export function BookingFlow({ businessId, businessSlug, services, availability }
               key={service.id}
               type="button"
               onClick={() => setSelectedServiceId(service.id)}
-              className={`text-left rounded-2xl border p-4 transition ${selectedServiceId === service.id ? "border-slate-900 bg-slate-900/5" : "border-slate-200"}`}
+              className={`rounded-2xl border p-4 text-left transition ${selectedServiceId === service.id ? "border-slate-900 bg-slate-900/5" : "border-slate-200"}`}
             >
               <p className="text-sm font-semibold text-slate-900">{service.name}</p>
-              <p className="text-xs text-slate-500">{service.durationMinutes} min • {(service.priceCents / 100).toFixed(2)} {service.currency}</p>
+              <p className="text-xs text-slate-500">
+                {service.durationMinutes} min - {(service.priceCents / 100).toFixed(2)} {service.currency}
+              </p>
             </button>
           ))}
           {services.length === 0 && <p className="text-sm text-slate-500">No services configured yet.</p>}
         </div>
       )}
 
-      {step === "selectSlot" && (
+      {step === "selectProvider" && (
         <div className="mt-6 grid gap-4 md:grid-cols-2">
-          {availability.map((block) => (
+          {providers.map((provider) => (
             <button
-              key={block.id}
+              key={provider.id}
               type="button"
-              onClick={() => setSelectedBlock(block)}
-              className={`text-left rounded-2xl border p-4 transition ${selectedBlock?.id === block.id ? "border-emerald-500 bg-emerald-50" : "border-slate-200"}`}
+              onClick={() => setSelectedProviderId(provider.id)}
+              className={`rounded-2xl border p-4 text-left transition ${selectedProviderId === provider.id ? "border-slate-900 bg-slate-900/5" : "border-slate-200"}`}
             >
-              <p className="text-sm font-semibold text-slate-900">
-                {new Date(block.startTime).toLocaleString()} - {new Date(block.endTime).toLocaleTimeString()}
-              </p>
-              <p className="text-xs text-slate-500">Capacity: {block.capacity}</p>
+              <p className="text-sm font-semibold text-slate-900">{provider.name}</p>
             </button>
           ))}
-          {availability.length === 0 && <p className="text-sm text-slate-500">No availability published.</p>}
+          {providers.length === 0 && <p className="text-sm text-slate-500">No providers configured yet.</p>}
+        </div>
+      )}
+
+      {step === "selectSlot" && (
+        <div className="mt-6 space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-sm text-slate-600" htmlFor="booking-date">Date</label>
+            <input
+              id="booking-date"
+              type="date"
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+              value={selectedDate}
+              onChange={(event) => {
+                const nextDate = event.target.value;
+                setSelectedDate(nextDate);
+                if (selectedProviderId) {
+                  fetchSlots(selectedProviderId, nextDate);
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="rounded-full border border-slate-200 px-4 py-2 text-xs"
+              onClick={() => {
+                if (selectedProviderId) {
+                  fetchSlots(selectedProviderId, selectedDate);
+                }
+              }}
+            >
+              Refresh slots
+            </button>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {slots.map((slot) => (
+              <button
+                key={slot.startTime}
+                type="button"
+                onClick={() => setSelectedSlot(slot)}
+                className={`rounded-2xl border p-4 text-left transition ${selectedSlot?.startTime === slot.startTime ? "border-emerald-500 bg-emerald-50" : "border-slate-200"}`}
+              >
+                <p className="text-sm font-semibold text-slate-900">
+                  {new Date(slot.startTime).toLocaleTimeString()} - {new Date(slot.endTime).toLocaleTimeString()}
+                </p>
+              </button>
+            ))}
+            {slots.length === 0 && (
+              <p className="text-sm text-slate-500">No available slots for this date.</p>
+            )}
+          </div>
         </div>
       )}
 
       {step === "confirm" && (
         <div className="mt-6 space-y-4">
+          <p className="text-sm text-slate-500">
+            Service: {selectedService?.name ?? "-"} - Provider: {selectedProvider?.name ?? "-"}
+          </p>
+          <p className="text-sm text-slate-500">
+            Time: {selectedSlot ? new Date(selectedSlot.startTime).toLocaleString() : "-"}
+          </p>
           <input
             className="w-full rounded-2xl border border-slate-200 px-4 py-2"
             placeholder="Full name"

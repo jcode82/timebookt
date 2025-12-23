@@ -16,7 +16,7 @@ export default async function BookingPage({ params }: BookingPageProps) {
     notFound();
   }
 
-  const { business, services, availability } = context;
+  const { business, services, providers } = context;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-12">
@@ -26,7 +26,7 @@ export default async function BookingPage({ params }: BookingPageProps) {
           businessId={business.id}
           businessSlug={business.slug}
           services={services}
-          availability={availability}
+          providers={providers}
         />
         <BookingSidebar contactEmail={business.contactEmail} contactPhone={business.contactPhone} />
       </div>

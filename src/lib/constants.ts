@@ -29,6 +29,6 @@ export const DASHBOARD_LIMITS = {
   auditLogs: 10,
 };
 
-export const BOOKING_STEPS = ["selectService", "selectSlot", "confirm"] as const;
+export const BOOKING_STEPS = ["selectService", "selectProvider", "selectSlot", "confirm"] as const;
 
 export const TEMPLATE_CHANNELS = ["email", "sms"] as const;
