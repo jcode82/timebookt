@@ -226,7 +226,14 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
     notes: payload.notes ?? null,
   });
 
-  if (error || !data) {
+  if (error) {
+    if (error.code === "23P01") {
+      throw new DomainError("Appointment overlaps an existing booking", { error, input });
+    }
+    throw new DomainError("Unable to create appointment", { error, input });
+  }
+
+  if (!data) {
     throw new DomainError("Unable to create appointment", { error, input });
   }
 
