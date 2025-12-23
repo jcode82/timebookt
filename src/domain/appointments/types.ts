@@ -37,6 +37,16 @@ export interface CanonicalAppointmentInput {
   notes?: string;
 }
 
+export interface ProviderAvailabilityRequest {
+  providerId: string;
+  date: string;
+}
+
+export interface ProviderAvailabilitySlot {
+  startTime: string;
+  endTime: string;
+}
+
 export interface CancelAppointmentInput {
   appointmentId: string;
   cancellationReason?: string;

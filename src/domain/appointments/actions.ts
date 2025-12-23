@@ -13,6 +13,8 @@ import type {
   CancelAppointmentInput,
   CanonicalAppointmentInput,
   CreateAppointmentInput,
+  ProviderAvailabilityRequest,
+  ProviderAvailabilitySlot,
 } from "./types";
 
 // const APPOINTMENTS_TABLE = "appointments" as const;
@@ -52,6 +54,35 @@ const canonicalAppointmentSchema = z
       path: ["endTime"],
     },
   );
+
+const providerAvailabilitySchema = z.object({
+  providerId: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
+});
+
+const SLOT_MINUTES = 30;
+
+const buildDayRange = (dateStr: string) => {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const dayStart = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  const dayEnd = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+  return { dayStart, dayEnd, dayOfWeek: dayStart.getUTCDay() };
+};
+
+const applyTimeToDate = (dateBase: Date, timeIso: string) => {
+  const time = new Date(timeIso);
+  return new Date(
+    Date.UTC(
+      dateBase.getUTCFullYear(),
+      dateBase.getUTCMonth(),
+      dateBase.getUTCDate(),
+      time.getUTCHours(),
+      time.getUTCMinutes(),
+      0,
+      0,
+    ),
+  );
+};
 
 const mapAvailability = (row: Tables<"availability_blocks">): AvailabilityBlock => ({
   id: row.id,
@@ -241,6 +272,91 @@ export async function listAppointmentsForBusiness(
   }
 
   return (data ?? []).map(mapAppointment);
+}
+
+export async function getProviderAvailabilityForDate(
+  request: ProviderAvailabilityRequest,
+): Promise<ProviderAvailabilitySlot[]> {
+  const parsed = providerAvailabilitySchema.safeParse(request);
+  if (!parsed.success) {
+    console.error("Invalid provider availability request", {
+      issues: parsed.error.flatten(),
+      request,
+    });
+    throw new DomainError("Invalid provider availability request", {
+      issues: parsed.error.flatten(),
+    });
+  }
+
+  const { providerId, date } = parsed.data;
+  const { dayStart, dayEnd, dayOfWeek } = buildDayRange(date);
+  const supabase = getSupabaseAdmin();
+
+  const [availabilityRes, appointmentsRes] = await Promise.all([
+    supabase
+      .from(TABLES.availabilityBlocks)
+      .select("id, staff_id, day_of_week, start_time, end_time, capacity")
+      .eq("staff_id", providerId)
+      .eq("day_of_week", dayOfWeek)
+      .eq("region_code", REGION),
+    supabase
+      .from(TABLES.appointments)
+      .select("id, start_time, end_time")
+      .eq("staff_id", providerId)
+      .neq("status", "canceled")
+      .eq("region_code", REGION)
+      .gte("start_time", dayStart.toISOString())
+      .lte("end_time", dayEnd.toISOString()),
+  ]);
+
+  if (availabilityRes.error) {
+    throw new DomainError("Unable to load availability", {
+      error: availabilityRes.error,
+      request,
+    });
+  }
+
+  if (appointmentsRes.error) {
+    throw new DomainError("Unable to load appointments", {
+      error: appointmentsRes.error,
+      request,
+    });
+  }
+
+  const availabilityRows = (availabilityRes.data ?? []) as Tables<"availability_blocks">[];
+  const appointmentRows = (appointmentsRes.data ?? []) as Tables<"appointments">[];
+  const slots: ProviderAvailabilitySlot[] = [];
+  const slotMs = SLOT_MINUTES * 60 * 1000;
+
+  availabilityRows.forEach((block) => {
+    if (!block.start_time || !block.end_time) return;
+    const blockStart = applyTimeToDate(dayStart, block.start_time);
+    const blockEnd = applyTimeToDate(dayStart, block.end_time);
+    const capacity = block.capacity ?? 1;
+
+    for (let ts = blockStart.getTime(); ts + slotMs <= blockEnd.getTime(); ts += slotMs) {
+      const slotStart = new Date(ts);
+      const slotEnd = new Date(ts + slotMs);
+      let overlapCount = 0;
+
+      for (const appt of appointmentRows) {
+        const apptStart = new Date(appt.start_time);
+        const apptEnd = new Date(appt.end_time);
+        if (apptStart < slotEnd && apptEnd > slotStart) {
+          overlapCount += 1;
+        }
+      }
+
+      if (overlapCount < capacity) {
+        slots.push({
+          startTime: slotStart.toISOString(),
+          endTime: slotEnd.toISOString(),
+        });
+      }
+    }
+  });
+
+  return slots;
 }
 
 export async function getAvailability(
