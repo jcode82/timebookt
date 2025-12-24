@@ -26,10 +26,11 @@ export async function getBookingContext(slug: string) {
   if (providersRes.error) {
     throw providersRes.error;
   }
+  const providerRows = (providersRes.data ?? []) as Array<{ id: string; full_name: string | null }>;
 
-  const providers = (providersRes.data ?? []).map((provider) => ({
+  const providers = providerRows.map((provider) => ({
     id: provider.id,
-    name: provider.full_name,
+    name: provider.full_name ?? "",
   }));
 
   return { business, services, providers };
