@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import type { ProviderAvailabilitySlot } from "@/domain/appointments";
 import type { ServiceRecord } from "@/domain/services";
 import { BOOKING_STEPS } from "@/lib/constants";
-import { createBookingAction } from "@/features/booking/api/createBookingAction";
+import { createBookingAction, type BookingConfirmation } from "@/features/booking/api/createBookingAction";
 import { getProviderAvailabilityAction } from "@/features/booking/api/getProviderAvailabilityAction";
 
 interface ProviderOption {
@@ -28,6 +28,7 @@ export function BookingFlow({ businessId, businessSlug, services, providers }: B
   const [selectedDate, setSelectedDate] = useState<string>(formatDateInput(new Date()));
   const [slots, setSlots] = useState<ProviderAvailabilitySlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<ProviderAvailabilitySlot | null>(null);
+  const [confirmation, setConfirmation] = useState<BookingConfirmation | null>(null);
   const [formState, setFormState] = useState({
     customerName: "",
     customerEmail: "",
@@ -94,7 +95,7 @@ export function BookingFlow({ businessId, businessSlug, services, providers }: B
       return;
     }
     startTransition(async () => {
-      await createBookingAction({
+      const confirmation = await createBookingAction({
         businessId,
         businessSlug,
         providerId: selectedProvider.id,
@@ -106,15 +107,42 @@ export function BookingFlow({ businessId, businessSlug, services, providers }: B
         customerPhone: formState.customerPhone,
         notes: formState.notes,
       });
-      setFeedback("Appointment scheduled. Check your email for confirmation.");
-      setStep(BOOKING_STEPS[0]);
-      setSelectedServiceId(services[0]?.id ?? null);
-      setSelectedProviderId(providers[0]?.id ?? null);
-      setSelectedSlot(null);
-      setSlots([]);
-      setFormState({ customerName: "", customerEmail: "", customerPhone: "", notes: "" });
+      setConfirmation(confirmation);
+      setFeedback(null);
     });
   };
+
+  const handleReset = () => {
+    setFeedback(null);
+    setConfirmation(null);
+    setStep(BOOKING_STEPS[0]);
+    setSelectedServiceId(services[0]?.id ?? null);
+    setSelectedProviderId(providers[0]?.id ?? null);
+    setSelectedSlot(null);
+    setSlots([]);
+    setFormState({ customerName: "", customerEmail: "", customerPhone: "", notes: "" });
+  };
+
+  if (confirmation) {
+    return (
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">Booking confirmed</h2>
+        <p className="mt-2 text-sm text-slate-600">Appointment ID: {confirmation.appointmentId}</p>
+        <p className="mt-2 text-sm text-slate-600">Service: {confirmation.service}</p>
+        <p className="mt-2 text-sm text-slate-600">Provider: {confirmation.provider}</p>
+        <p className="mt-2 text-sm text-slate-600">
+          Start: {new Date(confirmation.startTime).toLocaleString()}
+        </p>
+        <button
+          type="button"
+          className="mt-6 rounded-full border border-slate-200 px-4 py-2 text-sm"
+          onClick={handleReset}
+        >
+          Book another
+        </button>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -167,7 +195,9 @@ export function BookingFlow({ businessId, businessSlug, services, providers }: B
       {step === "selectSlot" && (
         <div className="mt-6 space-y-4">
           <div className="flex flex-wrap items-center gap-3">
-            <label className="text-sm text-slate-600" htmlFor="booking-date">Date</label>
+            <label className="text-sm text-slate-600" htmlFor="booking-date">
+              Date
+            </label>
             <input
               id="booking-date"
               type="date"
