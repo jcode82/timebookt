@@ -47,6 +47,17 @@ export interface ProviderAvailabilitySlot {
   endTime: string;
 }
 
+export interface BookingStatusDetails {
+  appointmentId: string;
+  service: string;
+  provider: string;
+  startTime: string;
+  endTime: string;
+  status: AppointmentStatus;
+  customerName: string;
+  customerEmail: string;
+}
+
 export interface CancelAppointmentInput {
   appointmentId: string;
   cancellationReason?: string;

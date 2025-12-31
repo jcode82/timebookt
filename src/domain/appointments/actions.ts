@@ -10,6 +10,7 @@ import type {
   AppointmentRecord,
   AvailabilityBlock,
   AvailabilityRequest,
+  BookingStatusDetails,
   CancelAppointmentInput,
   CanonicalAppointmentInput,
   CreateAppointmentInput,
@@ -279,6 +280,71 @@ export async function listAppointmentsForBusiness(
   }
 
   return (data ?? []).map(mapAppointment);
+}
+
+export async function getBookingStatus(
+  appointmentId: string,
+): Promise<BookingStatusDetails | null> {
+  const supabase = getSupabaseAdmin();
+  const appointmentRes = await supabase
+    .from(TABLES.appointments)
+    .select("id, service_id, staff_id, customer_id, start_time, end_time, status")
+    .eq("id", appointmentId)
+    .eq("region_code", REGION)
+    .maybeSingle();
+
+  if (appointmentRes.error) {
+    throw new DomainError("Unable to load booking", { error: appointmentRes.error, appointmentId });
+  }
+
+  if (!appointmentRes.data) {
+    return null;
+  }
+
+  const appointmentRow = appointmentRes.data as Tables<"appointments">;
+  const [serviceRes, providerRes, customerRes] = await Promise.all([
+    supabase
+      .from(TABLES.services)
+      .select("id, name")
+      .eq("id", appointmentRow.service_id)
+      .maybeSingle(),
+    supabase
+      .from(TABLES.staff)
+      .select("id, full_name")
+      .eq("id", appointmentRow.staff_id ?? "")
+      .maybeSingle(),
+    supabase
+      .from(TABLES.customers)
+      .select("id, full_name, email")
+      .eq("id", appointmentRow.customer_id)
+      .maybeSingle(),
+  ]);
+
+  if (serviceRes.error || !serviceRes.data) {
+    throw new DomainError("Unable to load booking service", { error: serviceRes.error, appointmentId });
+  }
+
+  if (providerRes.error) {
+    throw new DomainError("Unable to load booking provider", { error: providerRes.error, appointmentId });
+  }
+  if (customerRes.error || !customerRes.data) {
+    throw new DomainError("Unable to load booking customer", { error: customerRes.error, appointmentId });
+  }
+
+  const serviceRow = serviceRes.data as { id: string; name: string };
+  const providerRow = providerRes.data as { id: string; full_name: string | null } | null;
+  const customerRow = customerRes.data as { id: string; full_name: string; email: string };
+
+  return {
+    appointmentId: appointmentRow.id,
+    service: serviceRow.name,
+    provider: providerRow?.full_name ?? "",
+    startTime: appointmentRow.start_time,
+    endTime: appointmentRow.end_time,
+    status: appointmentRow.status as BookingStatusDetails["status"],
+    customerName: customerRow.full_name,
+    customerEmail: customerRow.email,
+  };
 }
 
 export async function getProviderAvailabilityForDate(
