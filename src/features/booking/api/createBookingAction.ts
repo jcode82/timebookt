@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createCanonicalAppointment } from "@/domain/appointments";
+import { sendBookingConfirmationEmail } from "@/lib/email/sendBookingConfirmationEmail";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
 import { TABLES } from "@/lib/constants";
 import { REGION } from "@/lib/env";
@@ -24,7 +25,12 @@ export type BookingConfirmation = {
 };
 
 export async function createBookingAction(input: CreateBookingActionInput): Promise<BookingConfirmation> {
-  const parsed = actionSchema.parse(input);
+  const parsedResult = actionSchema.safeParse(input);
+  if (!parsedResult.success) {
+    console.error("Invalid booking input", { issues: parsedResult.error.flatten(), input });
+    throw new Error("Invalid booking input");
+  }
+  const parsed = parsedResult.data;
   const appointment = await createCanonicalAppointment({
     serviceId: parsed.serviceId,
     providerId: parsed.providerId,
@@ -70,5 +76,14 @@ export async function createBookingAction(input: CreateBookingActionInput): Prom
   };
 
   revalidatePath(`/${parsed.businessSlug}/book`);
+
+  void sendBookingConfirmationEmail({
+    to: parsed.customerEmail,
+    service: confirmation.service,
+    provider: confirmation.provider,
+    startTime: confirmation.startTime,
+  }).catch((error) => {
+    console.error("Failed to send booking confirmation email", { error, appointmentId: confirmation.appointmentId });
+  });
   return confirmation;
 }
