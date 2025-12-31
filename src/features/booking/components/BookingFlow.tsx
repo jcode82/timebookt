@@ -95,20 +95,25 @@ export function BookingFlow({ businessId, businessSlug, services, providers }: B
       return;
     }
     startTransition(async () => {
-      const confirmation = await createBookingAction({
-        businessId,
-        businessSlug,
-        providerId: selectedProvider.id,
-        serviceId: selectedService.id,
-        startTime: selectedSlot.startTime,
-        endTime: selectedSlot.endTime,
-        customerName: formState.customerName,
-        customerEmail: formState.customerEmail,
-        customerPhone: formState.customerPhone,
-        notes: formState.notes,
-      });
-      setConfirmation(confirmation);
-      setFeedback(null);
+      try {
+        const confirmation = await createBookingAction({
+          businessId,
+          businessSlug,
+          providerId: selectedProvider.id,
+          serviceId: selectedService.id,
+          startTime: selectedSlot.startTime,
+          endTime: selectedSlot.endTime,
+          customerName: formState.customerName,
+          customerEmail: formState.customerEmail,
+          customerPhone: formState.customerPhone,
+          notes: formState.notes,
+        });
+        setConfirmation(confirmation);
+        setFeedback(null);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to book appointment";
+        setFeedback(message);
+      }
     });
   };
 
