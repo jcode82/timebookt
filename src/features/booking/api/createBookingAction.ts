@@ -71,7 +71,7 @@ export async function createBookingAction(input: CreateBookingActionInput): Prom
   const confirmation: BookingConfirmation = {
     appointmentId: appointment.id,
     service: serviceRow.name,
-    provider: providerRow.full_name ?? "",
+    provider: providerRow.full_name ?? "Provider",
     startTime: appointment.startTime,
   };
 
