@@ -24,10 +24,14 @@ export type BookingConfirmation = {
   startTime: string;
 };
 
+const logBookingEvent = (event: string, payload: Record<string, unknown>) => {
+  console.info("booking.event", { event, ...payload });
+};
+
 export async function createBookingAction(input: CreateBookingActionInput): Promise<BookingConfirmation> {
   const parsedResult = actionSchema.safeParse(input);
   if (!parsedResult.success) {
-    console.error("Invalid booking input", { issues: parsedResult.error.flatten(), input });
+    console.error("Invalid booking input", { issues: parsedResult.error.flatten() });
     throw new Error("Invalid booking input");
   }
   const parsed = parsedResult.data;
@@ -41,6 +45,13 @@ export async function createBookingAction(input: CreateBookingActionInput): Prom
     customerEmail: parsed.customerEmail,
     customerPhone: parsed.customerPhone,
     notes: parsed.notes,
+  });
+
+  logBookingEvent("created", {
+    appointmentId: appointment.id,
+    serviceId: parsed.serviceId,
+    providerId: parsed.providerId,
+    startTime: appointment.startTime,
   });
 
   const supabase = getSupabaseAdmin();
@@ -75,6 +86,8 @@ export async function createBookingAction(input: CreateBookingActionInput): Prom
     startTime: appointment.startTime,
   };
 
+  logBookingEvent("confirmed", { appointmentId: confirmation.appointmentId });
+
   revalidatePath(`/${parsed.businessSlug}/book`);
 
   void sendBookingConfirmationEmail({
@@ -82,8 +95,12 @@ export async function createBookingAction(input: CreateBookingActionInput): Prom
     service: confirmation.service,
     provider: confirmation.provider,
     startTime: confirmation.startTime,
-  }).catch((error) => {
-    console.error("Failed to send booking confirmation email", { error, appointmentId: confirmation.appointmentId });
-  });
+  })
+    .then(() => {
+      logBookingEvent("email_sent", { appointmentId: confirmation.appointmentId });
+    })
+    .catch((error) => {
+      console.error("booking.email_failed", { error, appointmentId: confirmation.appointmentId });
+    });
   return confirmation;
 }
