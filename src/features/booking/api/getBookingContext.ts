@@ -30,7 +30,7 @@ export async function getBookingContext(slug: string) {
 
   const providers = providerRows.map((provider) => ({
     id: provider.id,
-    name: provider.full_name ?? "",
+    name: provider.full_name ?? "Provider",
   }));
 
   return { business, services, providers };
