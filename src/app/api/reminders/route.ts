@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/client";
 import { TABLES } from "@/lib/constants";
 import { REGION } from "@/lib/env";
 import { sendAppointmentReminderEmail } from "@/lib/email/sendAppointmentReminderEmail";
+import { rpcCall } from "@/lib/supabase/rpc";
 
 const DEFAULT_REMINDER_HOURS = 24;
 const REMINDER_WINDOW_MINUTES = 15;
@@ -21,20 +22,29 @@ const getReminderHours = () => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_REMINDER_HOURS;
 };
 
+const getReminderType = (hoursBefore: number) => `lead_${hoursBefore}h`;
+
+const computeScheduledForIso = (appointmentStartIso: string, hoursBefore: number) => {
+  const apptStart = new Date(appointmentStartIso);
+  const ms = apptStart.getTime() - hoursBefore * 60 * 60 * 1000;
+  return new Date(ms).toISOString();
+};
+
 const isAuthorized = (request: Request) => {
-  const secret = process.env.REMINDER_SECRET;
+  const secret = process.env.CRON_SECRET;
   if (!secret) return false;
   const header = request.headers.get("authorization");
   return header === `Bearer ${secret}`;
 };
 
-export async function POST(request: Request) {
+async function runReminderJob(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const hoursBefore = getReminderHours();
   const { windowStart, windowEnd } = getReminderWindow(hoursBefore);
+  const reminderType = getReminderType(hoursBefore);
   const supabase = getSupabaseAdmin();
 
   const { data: appointments, error } = await supabase
@@ -50,10 +60,48 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unable to load appointments" }, { status: 500 });
   }
 
-  const appointmentRows = (appointments ?? []) as Array<{ id: string; service_id: string; staff_id: string | null; customer_id: string; start_time: string }>;
+  const appointmentRows = (appointments ?? []) as Array<{
+    id: string;
+    service_id: string;
+    staff_id: string | null;
+    customer_id: string;
+    start_time: string;
+  }>;
 
   const results = await Promise.all(
     appointmentRows.map(async (appointment) => {
+      const scheduledFor = computeScheduledForIso(appointment.start_time, hoursBefore);
+
+      const { error: eventError } = await rpcCall(
+        supabase,
+        "create_appointment_reminder_event",
+        {
+          appointment_id: appointment.id,
+          reminder_type: reminderType,
+          scheduled_for: scheduledFor,
+          meta: { hoursBefore, region: REGION },
+        },
+      );
+
+      if (eventError) {
+        const message = String((eventError as { message?: string }).message ?? "").toLowerCase();
+        const code = String((eventError as { code?: string }).code ?? "");
+        const isUnique =
+          code === "23505" || message.includes("duplicate") || message.includes("unique");
+
+        if (isUnique) {
+          console.info("reminder.skip_already_sent", {
+            appointmentId: appointment.id,
+            reminderType,
+            scheduledFor,
+          });
+          return { appointmentId: appointment.id, status: "skipped_already_sent" };
+        }
+
+        console.error("reminder.event_insert_failed", { appointmentId: appointment.id, error: eventError });
+        return { appointmentId: appointment.id, status: "event_insert_failed" };
+      }
+
       const [serviceRes, providerRes, customerRes] = await Promise.all([
         supabase
           .from(TABLES.services)
@@ -99,20 +147,44 @@ export async function POST(request: Request) {
           startTime: appointment.start_time,
           hoursBefore,
         });
-        console.info("booking.reminder_sent", { appointmentId: appointment.id });
+        console.info("booking.reminder_sent", {
+          appointmentId: appointment.id,
+          reminderType,
+          scheduledFor,
+        });
         return { appointmentId: appointment.id, status: "sent" };
       } catch (sendError) {
-        console.error("booking.reminder_failed", { appointmentId: appointment.id, error: sendError });
+        console.error("booking.reminder_failed", {
+          appointmentId: appointment.id,
+          error: sendError,
+          reminderType,
+          scheduledFor,
+        });
         return { appointmentId: appointment.id, status: "failed" };
       }
     }),
   );
 
+  const summary = results.reduce((acc: Record<string, number>, entry) => {
+    acc[entry.status] = (acc[entry.status] ?? 0) + 1;
+    return acc;
+  }, {});
+
   return NextResponse.json({
     hoursBefore,
+    reminderType,
     windowStart: windowStart.toISOString(),
     windowEnd: windowEnd.toISOString(),
     processed: results.length,
+    summary,
     results,
   });
+}
+
+export async function GET(request: Request) {
+  return runReminderJob(request);
+}
+
+export async function POST(request: Request) {
+  return runReminderJob(request);
 }

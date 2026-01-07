@@ -240,6 +240,25 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["waitlist"]["Insert"]>;
       };
+      appointment_reminder_events: {
+        Row: {
+          id: string;
+          appointment_id: string;
+          reminder_type: string;
+          scheduled_for: string;
+          created_at: string;
+          meta: Json;
+        };
+        Insert: {
+          id?: string;
+          appointment_id: string;
+          reminder_type: string;
+          scheduled_for: string;
+          created_at?: string;
+          meta?: Json;
+        };
+        Update: Partial<Database["public"]["Tables"]["appointment_reminder_events"]["Insert"]>;
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -315,6 +334,15 @@ export type Database = {
           email: string;
         };
         Returns: Database["public"]["Tables"]["waitlist"]["Row"];
+      };
+      create_appointment_reminder_event: {
+        Args: {
+          appointment_id: string;
+          reminder_type: string;
+          scheduled_for: string;
+          meta?: Json;
+        };
+        Returns: Database["public"]["Tables"]["appointment_reminder_events"]["Row"];
       };
     };
     Enums: Record<string, never>;
