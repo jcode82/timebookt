@@ -57,6 +57,7 @@ const canonicalAppointmentSchema = z
   );
 
 const providerAvailabilitySchema = z.object({
+  businessId: z.string().min(1),
   providerId: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
 });
@@ -82,6 +83,19 @@ const applyTimeToDate = (dateBase: Date, timeIso: string) => {
       0,
       0,
     ),
+  );
+};
+
+export const dedupeAndSortSlots = (
+  slots: ProviderAvailabilitySlot[],
+): ProviderAvailabilitySlot[] => {
+  const uniqueSlots = new Map<string, ProviderAvailabilitySlot>();
+  for (const slot of slots) {
+    uniqueSlots.set(`${slot.startTime}_${slot.endTime}`, slot);
+  }
+
+  return Array.from(uniqueSlots.values()).sort(
+    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
   );
 };
 
@@ -246,7 +260,7 @@ export async function cancelAppointment(input: CancelAppointmentInput): Promise<
 
   const payload: TablesUpdate<"appointments"> = {
     status: "canceled",
-    cancellation_reason: input.cancellationReason ?? "canceled-by-admin",
+    cancellation_reason: input.cancellationReason ?? null,
   };
 
   const { data, error } = await rpcCall<Tables<"appointments">>(supabase, "cancel_appointment", {
@@ -361,7 +375,7 @@ export async function getProviderAvailabilityForDate(
     });
   }
 
-  const { providerId, date } = parsed.data;
+  const { businessId, providerId, date } = parsed.data;
   const { dayStart, dayEnd, dayOfWeek } = buildDayRange(date);
   const supabase = getSupabaseAdmin();
 
@@ -370,6 +384,7 @@ export async function getProviderAvailabilityForDate(
       .from(TABLES.availabilityBlocks)
       .select("id, staff_id, day_of_week, start_time, end_time, capacity")
       .eq("staff_id", providerId)
+      .eq("business_id", businessId)
       .eq("day_of_week", dayOfWeek)
       .eq("region_code", REGION),
     supabase
@@ -378,8 +393,8 @@ export async function getProviderAvailabilityForDate(
       .eq("staff_id", providerId)
       .neq("status", "canceled")
       .eq("region_code", REGION)
-      .gte("start_time", dayStart.toISOString())
-      .lte("end_time", dayEnd.toISOString()),
+      .lt("start_time", dayEnd.toISOString())
+      .gt("end_time", dayStart.toISOString()),
   ]);
 
   if (availabilityRes.error) {
@@ -429,7 +444,7 @@ export async function getProviderAvailabilityForDate(
     }
   });
 
-  return slots;
+  return dedupeAndSortSlots(slots);
 }
 
 export async function getAvailability(
