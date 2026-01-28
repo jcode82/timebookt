@@ -4,6 +4,7 @@ import { TABLES } from "@/lib/constants";
 import { REGION } from "@/lib/env";
 import { sendAppointmentReminderEmail } from "@/lib/email/sendAppointmentReminderEmail";
 import { rpcCall } from "@/lib/supabase/rpc";
+import { filterRemindableAppointments } from "./utils";
 
 const DEFAULT_REMINDER_HOURS = 24;
 const REMINDER_WINDOW_MINUTES = 15;
@@ -49,7 +50,7 @@ async function runReminderJob(request: Request) {
 
   const { data: appointments, error } = await supabase
     .from(TABLES.appointments)
-    .select("id, service_id, staff_id, customer_id, start_time")
+    .select("id, service_id, staff_id, customer_id, start_time, status")
     .eq("region_code", REGION)
     .eq("status", "scheduled")
     .gte("start_time", windowStart.toISOString())
@@ -66,10 +67,11 @@ async function runReminderJob(request: Request) {
     staff_id: string | null;
     customer_id: string;
     start_time: string;
+    status: string;
   }>;
 
   const results = await Promise.all(
-    appointmentRows.map(async (appointment) => {
+    filterRemindableAppointments(appointmentRows).map(async (appointment) => {
       const scheduledFor = computeScheduledForIso(appointment.start_time, hoursBefore);
 
       const { error: eventError } = await rpcCall(
