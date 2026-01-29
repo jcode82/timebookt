@@ -17,6 +17,7 @@ import type {
   ProviderAvailabilityRequest,
   ProviderAvailabilitySlot,
 } from "./types";
+import { dedupeAndSortSlots, parseTimestamp } from "./utils";
 
 // const APPOINTMENTS_TABLE = "appointments" as const;
 // const AVAILABILITY_TABLE = "availability_blocks" as const;
@@ -57,6 +58,7 @@ const canonicalAppointmentSchema = z
   );
 
 const providerAvailabilitySchema = z.object({
+  businessId: z.string().min(1),
   providerId: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
 });
@@ -71,7 +73,10 @@ const buildDayRange = (dateStr: string) => {
 };
 
 const applyTimeToDate = (dateBase: Date, timeIso: string) => {
-  const time = new Date(timeIso);
+  const time = parseTimestamp(timeIso);
+  if (!time) {
+    return null;
+  }
   return new Date(
     Date.UTC(
       dateBase.getUTCFullYear(),
@@ -246,7 +251,7 @@ export async function cancelAppointment(input: CancelAppointmentInput): Promise<
 
   const payload: TablesUpdate<"appointments"> = {
     status: "canceled",
-    cancellation_reason: input.cancellationReason ?? "canceled-by-admin",
+    cancellation_reason: input.cancellationReason ?? null,
   };
 
   const { data, error } = await rpcCall<Tables<"appointments">>(supabase, "cancel_appointment", {
@@ -361,7 +366,7 @@ export async function getProviderAvailabilityForDate(
     });
   }
 
-  const { providerId, date } = parsed.data;
+  const { businessId, providerId, date } = parsed.data;
   const { dayStart, dayEnd, dayOfWeek } = buildDayRange(date);
   const supabase = getSupabaseAdmin();
 
@@ -370,16 +375,16 @@ export async function getProviderAvailabilityForDate(
       .from(TABLES.availabilityBlocks)
       .select("id, staff_id, day_of_week, start_time, end_time, capacity")
       .eq("staff_id", providerId)
+      .eq("business_id", businessId)
       .eq("day_of_week", dayOfWeek)
       .eq("region_code", REGION),
     supabase
       .from(TABLES.appointments)
       .select("id, start_time, end_time")
       .eq("staff_id", providerId)
+      .eq("business_id", businessId)
       .neq("status", "canceled")
-      .eq("region_code", REGION)
-      .gte("start_time", dayStart.toISOString())
-      .lte("end_time", dayEnd.toISOString()),
+      .eq("region_code", REGION),
   ]);
 
   if (availabilityRes.error) {
@@ -398,6 +403,14 @@ export async function getProviderAvailabilityForDate(
 
   const availabilityRows = (availabilityRes.data ?? []) as Tables<"availability_blocks">[];
   const appointmentRows = (appointmentsRes.data ?? []) as Tables<"appointments">[];
+  const dayStartMs = dayStart.getTime();
+  const dayEndMs = dayEnd.getTime();
+  const filteredAppointments = appointmentRows.filter((appt) => {
+    const apptStart = parseTimestamp(appt.start_time);
+    const apptEnd = parseTimestamp(appt.end_time);
+    if (!apptStart || !apptEnd) return false;
+    return apptStart.getTime() < dayEndMs && apptEnd.getTime() > dayStartMs;
+  });
   const slots: ProviderAvailabilitySlot[] = [];
   const slotMs = SLOT_MINUTES * 60 * 1000;
 
@@ -405,22 +418,21 @@ export async function getProviderAvailabilityForDate(
     if (!block.start_time || !block.end_time) return;
     const blockStart = applyTimeToDate(dayStart, block.start_time);
     const blockEnd = applyTimeToDate(dayStart, block.end_time);
-    const capacity = block.capacity ?? 1;
-
+    if (!blockStart || !blockEnd) return;
     for (let ts = blockStart.getTime(); ts + slotMs <= blockEnd.getTime(); ts += slotMs) {
       const slotStart = new Date(ts);
       const slotEnd = new Date(ts + slotMs);
-      let overlapCount = 0;
+      // NOTE: DB currently enforces no-overlap (capacity=1 semantics).
+      // When multi-capacity booking is implemented, switch to overlapCount < capacity
+      // AND update the create_appointment RPC/constraint accordingly.
+      const hasOverlap = filteredAppointments.some((appt) => {
+        const apptStart = parseTimestamp(appt.start_time);
+        const apptEnd = parseTimestamp(appt.end_time);
+        if (!apptStart || !apptEnd) return false;
+        return apptStart < slotEnd && apptEnd > slotStart;
+      });
 
-      for (const appt of appointmentRows) {
-        const apptStart = new Date(appt.start_time);
-        const apptEnd = new Date(appt.end_time);
-        if (apptStart < slotEnd && apptEnd > slotStart) {
-          overlapCount += 1;
-        }
-      }
-
-      if (overlapCount < capacity) {
+      if (!hasOverlap) {
         slots.push({
           startTime: slotStart.toISOString(),
           endTime: slotEnd.toISOString(),
@@ -429,7 +441,7 @@ export async function getProviderAvailabilityForDate(
     }
   });
 
-  return slots;
+  return dedupeAndSortSlots(slots);
 }
 
 export async function getAvailability(

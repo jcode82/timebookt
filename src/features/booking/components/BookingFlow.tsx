@@ -50,7 +50,7 @@ export function BookingFlow({ businessId, businessSlug, services, providers }: B
 
   const fetchSlots = (providerId: string, date: string) => {
     startTransition(async () => {
-      const result = await getProviderAvailabilityAction({ providerId, date });
+      const result = await getProviderAvailabilityAction({ businessId, providerId, date });
       setSlots(result);
       setSelectedSlot(result[0] ?? null);
     });

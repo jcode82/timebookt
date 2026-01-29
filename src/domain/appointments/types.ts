@@ -38,6 +38,7 @@ export interface CanonicalAppointmentInput {
 }
 
 export interface ProviderAvailabilityRequest {
+  businessId: string;
   providerId: string;
   date: string;
 }
