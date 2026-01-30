@@ -259,6 +259,33 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["appointment_reminder_events"]["Insert"]>;
       };
+      appointment_lifecycle_events: {
+        Row: {
+          id: string;
+          appointment_id: string;
+          event_type: string;
+          from_start_time: string;
+          from_end_time: string;
+          to_start_time: string;
+          to_end_time: string;
+          reason: string | null;
+          source: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          appointment_id: string;
+          event_type: string;
+          from_start_time: string;
+          from_end_time: string;
+          to_start_time: string;
+          to_end_time: string;
+          reason?: string | null;
+          source?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["appointment_lifecycle_events"]["Insert"]>;
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -343,6 +370,17 @@ export type Database = {
           meta?: Json;
         };
         Returns: Database["public"]["Tables"]["appointment_reminder_events"]["Row"];
+      };
+      reschedule_appointment: {
+        Args: {
+          appointment_id: string;
+          region_code: string;
+          new_start_time: string;
+          new_end_time: string;
+          reason?: string | null;
+          source?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["appointments"]["Row"];
       };
     };
     Enums: Record<string, never>;

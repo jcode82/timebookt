@@ -64,6 +64,14 @@ export interface CancelAppointmentInput {
   cancellationReason?: string;
 }
 
+export interface RescheduleAppointmentInput {
+  appointmentId: string;
+  startTime: string;
+  endTime: string;
+  reason?: string;
+  source?: string;
+}
+
 export interface AvailabilityBlock {
   id: string;
   businessId: string;
