@@ -38,6 +38,13 @@ const mapAppointment = (row: Tables<"appointments">): AppointmentRecord => ({
   updatedAt: row.updated_at,
 });
 
+const isCapacityOverlapError = (error: { code?: string; message?: string } | null) => {
+  if (!error) return false;
+  if (error.code === "23P01") return true;
+  if (error.code !== "P0001") return false;
+  return /capacity|overlap/i.test(error.message ?? "");
+};
+
 const canonicalAppointmentSchema = z
   .object({
     serviceId: z.string().min(1),
@@ -234,7 +241,7 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
   });
 
   if (error) {
-    if (error.code === "23P01") {
+    if (isCapacityOverlapError(error)) {
       throw new DomainError("Appointment overlaps an existing booking", { error, input });
     }
     throw new DomainError("Unable to create appointment", { error, input });
@@ -302,7 +309,7 @@ export async function rescheduleAppointment(
   );
 
   if (error) {
-    if (error.code === "23P01") {
+    if (isCapacityOverlapError(error)) {
       throw new DomainError("Appointment overlaps an existing booking", { error, input });
     }
     throw new DomainError("Unable to reschedule appointment", { error, input });
@@ -470,17 +477,14 @@ export async function getProviderAvailabilityForDate(
     for (let ts = blockStart.getTime(); ts + slotMs <= blockEnd.getTime(); ts += slotMs) {
       const slotStart = new Date(ts);
       const slotEnd = new Date(ts + slotMs);
-      // NOTE: DB currently enforces no-overlap (capacity=1 semantics).
-      // When multi-capacity booking is implemented, switch to overlapCount < capacity
-      // AND update the create_appointment RPC/constraint accordingly.
-      const hasOverlap = filteredAppointments.some((appt) => {
+      const overlapCount = filteredAppointments.reduce((count, appt) => {
         const apptStart = parseTimestamp(appt.start_time);
         const apptEnd = parseTimestamp(appt.end_time);
-        if (!apptStart || !apptEnd) return false;
-        return apptStart < slotEnd && apptEnd > slotStart;
-      });
+        if (!apptStart || !apptEnd) return count;
+        return apptStart < slotEnd && apptEnd > slotStart ? count + 1 : count;
+      }, 0);
 
-      if (!hasOverlap) {
+      if (overlapCount < block.capacity) {
         slots.push({
           startTime: slotStart.toISOString(),
           endTime: slotEnd.toISOString(),

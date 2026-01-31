@@ -79,7 +79,7 @@ describe("rescheduleAppointment", () => {
   it("throws DomainError when reschedule overlaps another appointment", async () => {
     rpcCallMock.mockResolvedValueOnce({
       data: null,
-      error: { code: "23P01", message: "overlap" },
+      error: { code: "P0001", message: "Appointment capacity exceeded" },
     });
 
     await expect(
