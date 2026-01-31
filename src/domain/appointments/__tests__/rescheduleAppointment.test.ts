@@ -62,12 +62,12 @@ describe("rescheduleAppointment", () => {
       expect.anything(),
       "reschedule_appointment",
       {
-        appointment_id: "appt-1",
-        region_code: "test-region",
-        new_start_time: "2026-02-20T14:00:00.000Z",
-        new_end_time: "2026-02-20T14:30:00.000Z",
-        reason: "customer-requested",
-        source: "api",
+        p_appointment_id: "appt-1",
+        p_region_code: "test-region",
+        p_new_start_time: "2026-02-20T14:00:00.000Z",
+        p_new_end_time: "2026-02-20T14:30:00.000Z",
+        p_reason: "customer-requested",
+        p_source: "api",
       },
     );
 
