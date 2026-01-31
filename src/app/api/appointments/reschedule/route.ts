@@ -30,6 +30,10 @@ export async function PATCH(request: Request) {
     return NextResponse.json(appointment, { status: 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to reschedule appointment";
-    return NextResponse.json({ error: message }, { status: 400 });
+    const details =
+      error instanceof Error && "context" in error
+        ? (error as { context?: Record<string, unknown> }).context
+        : undefined;
+    return NextResponse.json({ error: message, details }, { status: 400 });
   }
 }

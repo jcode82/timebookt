@@ -373,12 +373,12 @@ export type Database = {
       };
       reschedule_appointment: {
         Args: {
-          appointment_id: string;
-          region_code: string;
-          new_start_time: string;
-          new_end_time: string;
-          reason?: string | null;
-          source?: string | null;
+          p_appointment_id: string;
+          p_region_code: string;
+          p_new_start_time: string;
+          p_new_end_time: string;
+          p_reason?: string | null;
+          p_source?: string | null;
         };
         Returns: Database["public"]["Tables"]["appointments"]["Row"];
       };

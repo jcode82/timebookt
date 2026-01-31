@@ -292,12 +292,12 @@ export async function rescheduleAppointment(
     supabase,
     "reschedule_appointment",
     {
-      appointment_id: input.appointmentId,
-      region_code: REGION,
-      new_start_time: input.startTime,
-      new_end_time: input.endTime,
-      reason: input.reason ?? null,
-      source: input.source ?? null,
+      p_appointment_id: input.appointmentId,
+      p_region_code: REGION,
+      p_new_start_time: input.startTime,
+      p_new_end_time: input.endTime,
+      p_reason: input.reason ?? null,
+      p_source: input.source ?? null,
     },
   );
 
