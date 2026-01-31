@@ -16,6 +16,7 @@ import type {
   CreateAppointmentInput,
   ProviderAvailabilityRequest,
   ProviderAvailabilitySlot,
+  RescheduleAppointmentInput,
 } from "./types";
 import { dedupeAndSortSlots, parseTimestamp } from "./utils";
 
@@ -262,6 +263,53 @@ export async function cancelAppointment(input: CancelAppointmentInput): Promise<
 
   if (error || !data) {
     throw new DomainError("Unable to cancel appointment", { error, input });
+  }
+
+  return mapAppointment(data);
+}
+
+export async function rescheduleAppointment(
+  input: RescheduleAppointmentInput,
+): Promise<AppointmentRecord> {
+  const start = parseTimestamp(input.startTime);
+  const end = parseTimestamp(input.endTime);
+
+  if (!start || !end) {
+    throw new DomainError("Invalid appointment time", { input });
+  }
+
+  if (end.getTime() <= start.getTime()) {
+    throw new DomainError("endTime must be after startTime", { input });
+  }
+
+  if (start.getTime() < Date.now()) {
+    throw new DomainError("Cannot reschedule into the past", { input });
+  }
+
+  const supabase = getSupabaseAdmin();
+
+  const { data, error } = await rpcCall<Tables<"appointments">>(
+    supabase,
+    "reschedule_appointment",
+    {
+      p_appointment_id: input.appointmentId,
+      p_region_code: REGION,
+      p_new_start_time: input.startTime,
+      p_new_end_time: input.endTime,
+      p_reason: input.reason ?? null,
+      p_source: input.source ?? null,
+    },
+  );
+
+  if (error) {
+    if (error.code === "23P01") {
+      throw new DomainError("Appointment overlaps an existing booking", { error, input });
+    }
+    throw new DomainError("Unable to reschedule appointment", { error, input });
+  }
+
+  if (!data) {
+    throw new DomainError("Unable to reschedule appointment", { error, input });
   }
 
   return mapAppointment(data);
