@@ -230,17 +230,24 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
   };
 
   const { data, error } = await rpcCall<Tables<"appointments">>(supabase, "create_appointment", {
-    business_id: payload.business_id,
-    customer_id: payload.customer_id,
-    service_id: payload.service_id,
-    staff_id: payload.staff_id ?? null,
-    region_code: payload.region_code ?? REGION,
-    start_time: payload.start_time,
-    end_time: payload.end_time,
-    notes: payload.notes ?? null,
+    p_business_id: payload.business_id,
+    p_customer_id: payload.customer_id,
+    p_service_id: payload.service_id,
+    p_region_code: payload.region_code ?? REGION,
+    p_start_time: payload.start_time,
+    p_end_time: payload.end_time,
+    p_staff_id: payload.staff_id ?? null,
+    p_notes: payload.notes ?? null,
   });
 
   if (error) {
+    console.error("appointments.rpc.error", {
+      code: (error as any)?.code,
+      message: (error as any)?.message,
+      details: (error as any)?.details,
+      hint: (error as any)?.hint,
+      full: error,
+    });
     if (isCapacityOverlapError(error)) {
       throw new DomainError("Appointment overlaps an existing booking", { error, input });
     }
@@ -483,8 +490,9 @@ export async function getProviderAvailabilityForDate(
         if (!apptStart || !apptEnd) return count;
         return apptStart < slotEnd && apptEnd > slotStart ? count + 1 : count;
       }, 0);
+      const capacity = Math.max(block.capacity ?? 1, 1);
 
-      if (overlapCount < block.capacity) {
+      if (overlapCount < capacity) {
         slots.push({
           startTime: slotStart.toISOString(),
           endTime: slotEnd.toISOString(),
