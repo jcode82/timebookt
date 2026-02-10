@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const availabilityRow = {
+const baseAvailabilityRow = {
   id: "block-1",
   business_id: "biz-1",
   staff_id: "staff-1",
@@ -12,11 +12,19 @@ const availabilityRow = {
   created_at: "2026-02-01T00:00:00.000Z",
 };
 
-const appointmentRow = {
+const baseAppointmentRow = {
   id: "appt-1",
   start_time: "2026-02-16T14:00:00.000Z",
   end_time: "2026-02-16T14:30:00.000Z",
 };
+
+let availabilityRows = [baseAvailabilityRow];
+let appointmentRows = [baseAppointmentRow];
+
+beforeEach(() => {
+  availabilityRows = [{ ...baseAvailabilityRow }];
+  appointmentRows = [{ ...baseAppointmentRow }];
+});
 
 const buildQuery = (result: { data: unknown; error: unknown }) => {
   const query = {
@@ -39,10 +47,10 @@ const buildQuery = (result: { data: unknown; error: unknown }) => {
 const supabaseMock = {
   from: (table: string) => {
     if (table === "availability_blocks") {
-      return buildQuery({ data: [availabilityRow], error: null });
+      return buildQuery({ data: availabilityRows, error: null });
     }
     if (table === "appointments") {
-      return buildQuery({ data: [appointmentRow], error: null });
+      return buildQuery({ data: appointmentRows, error: null });
     }
     return buildQuery({ data: [], error: null });
   },
@@ -60,6 +68,52 @@ import { getProviderAvailabilityForDate } from "../actions";
 
 describe("getProviderAvailabilityForDate", () => {
   it("removes slots that overlap scheduled appointments", async () => {
+    const slots = await getProviderAvailabilityForDate({
+      businessId: "biz-1",
+      providerId: "staff-1",
+      date: "2026-02-16",
+    });
+
+    expect(slots).toEqual([
+      {
+        startTime: "2026-02-16T14:30:00.000Z",
+        endTime: "2026-02-16T15:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("keeps slots when overlap is below capacity", async () => {
+    availabilityRows = [{ ...baseAvailabilityRow, capacity: 2 }];
+
+    const slots = await getProviderAvailabilityForDate({
+      businessId: "biz-1",
+      providerId: "staff-1",
+      date: "2026-02-16",
+    });
+
+    expect(slots).toEqual([
+      {
+        startTime: "2026-02-16T14:00:00.000Z",
+        endTime: "2026-02-16T14:30:00.000Z",
+      },
+      {
+        startTime: "2026-02-16T14:30:00.000Z",
+        endTime: "2026-02-16T15:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("removes slots once capacity is full", async () => {
+    availabilityRows = [{ ...baseAvailabilityRow, capacity: 2 }];
+    appointmentRows = [
+      { ...baseAppointmentRow },
+      {
+        id: "appt-2",
+        start_time: "2026-02-16T14:00:00.000Z",
+        end_time: "2026-02-16T14:30:00.000Z",
+      },
+    ];
+
     const slots = await getProviderAvailabilityForDate({
       businessId: "biz-1",
       providerId: "staff-1",

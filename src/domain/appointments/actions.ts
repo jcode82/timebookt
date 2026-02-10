@@ -38,6 +38,13 @@ const mapAppointment = (row: Tables<"appointments">): AppointmentRecord => ({
   updatedAt: row.updated_at,
 });
 
+const isCapacityOverlapError = (error: { code?: string; message?: string } | null) => {
+  if (!error) return false;
+  if (error.code === "23P01") return true;
+  if (error.code !== "P0001") return false;
+  return /capacity|overlap/i.test(error.message ?? "");
+};
+
 const canonicalAppointmentSchema = z
   .object({
     serviceId: z.string().min(1),
@@ -223,18 +230,25 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
   };
 
   const { data, error } = await rpcCall<Tables<"appointments">>(supabase, "create_appointment", {
-    business_id: payload.business_id,
-    customer_id: payload.customer_id,
-    service_id: payload.service_id,
-    staff_id: payload.staff_id ?? null,
-    region_code: payload.region_code ?? REGION,
-    start_time: payload.start_time,
-    end_time: payload.end_time,
-    notes: payload.notes ?? null,
+    p_business_id: payload.business_id,
+    p_customer_id: payload.customer_id,
+    p_service_id: payload.service_id,
+    p_region_code: payload.region_code ?? REGION,
+    p_start_time: payload.start_time,
+    p_end_time: payload.end_time,
+    p_staff_id: payload.staff_id ?? null,
+    p_notes: payload.notes ?? null,
   });
 
   if (error) {
-    if (error.code === "23P01") {
+    console.error("appointments.rpc.error", {
+      code: (error as any)?.code,
+      message: (error as any)?.message,
+      details: (error as any)?.details,
+      hint: (error as any)?.hint,
+      full: error,
+    });
+    if (isCapacityOverlapError(error)) {
       throw new DomainError("Appointment overlaps an existing booking", { error, input });
     }
     throw new DomainError("Unable to create appointment", { error, input });
@@ -302,7 +316,7 @@ export async function rescheduleAppointment(
   );
 
   if (error) {
-    if (error.code === "23P01") {
+    if (isCapacityOverlapError(error)) {
       throw new DomainError("Appointment overlaps an existing booking", { error, input });
     }
     throw new DomainError("Unable to reschedule appointment", { error, input });
@@ -470,17 +484,15 @@ export async function getProviderAvailabilityForDate(
     for (let ts = blockStart.getTime(); ts + slotMs <= blockEnd.getTime(); ts += slotMs) {
       const slotStart = new Date(ts);
       const slotEnd = new Date(ts + slotMs);
-      // NOTE: DB currently enforces no-overlap (capacity=1 semantics).
-      // When multi-capacity booking is implemented, switch to overlapCount < capacity
-      // AND update the create_appointment RPC/constraint accordingly.
-      const hasOverlap = filteredAppointments.some((appt) => {
+      const overlapCount = filteredAppointments.reduce((count, appt) => {
         const apptStart = parseTimestamp(appt.start_time);
         const apptEnd = parseTimestamp(appt.end_time);
-        if (!apptStart || !apptEnd) return false;
-        return apptStart < slotEnd && apptEnd > slotStart;
-      });
+        if (!apptStart || !apptEnd) return count;
+        return apptStart < slotEnd && apptEnd > slotStart ? count + 1 : count;
+      }, 0);
+      const capacity = Math.max(block.capacity ?? 1, 1);
 
-      if (!hasOverlap) {
+      if (overlapCount < capacity) {
         slots.push({
           startTime: slotStart.toISOString(),
           endTime: slotEnd.toISOString(),
