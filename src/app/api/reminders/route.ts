@@ -5,9 +5,16 @@ import { REGION } from "@/lib/env";
 import { sendAppointmentReminderEmail } from "@/lib/email/sendAppointmentReminderEmail";
 import { rpcCall } from "@/lib/supabase/rpc";
 import { filterRemindableAppointments } from "./utils";
+import { processAppointmentReminder } from "./processor";
+import type { Json } from "../../../../supabase/types";
 
 const DEFAULT_REMINDER_HOURS = 24;
 const REMINDER_WINDOW_MINUTES = 15;
+const REMINDER_CHANNEL = "email";
+const MAX_ATTEMPTS = 3;
+const BASE_RETRY_MINUTES = 5;
+const MAX_RETRY_MINUTES = 60;
+const LOCK_TIMEOUT_SECONDS = 600;
 
 const getReminderWindow = (hours: number) => {
   const now = new Date();
@@ -25,12 +32,6 @@ const getReminderHours = () => {
 
 const getReminderType = (hoursBefore: number) => `lead_${hoursBefore}h`;
 
-const computeScheduledForIso = (appointmentStartIso: string, hoursBefore: number) => {
-  const apptStart = new Date(appointmentStartIso);
-  const ms = apptStart.getTime() - hoursBefore * 60 * 60 * 1000;
-  return new Date(ms).toISOString();
-};
-
 const isAuthorized = (request: Request) => {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
@@ -43,6 +44,7 @@ async function runReminderJob(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const jobRunId = crypto.randomUUID();
   const hoursBefore = getReminderHours();
   const { windowStart, windowEnd } = getReminderWindow(hoursBefore);
   const reminderType = getReminderType(hoursBefore);
@@ -50,7 +52,7 @@ async function runReminderJob(request: Request) {
 
   const { data: appointments, error } = await supabase
     .from(TABLES.appointments)
-    .select("id, service_id, staff_id, customer_id, start_time, status")
+    .select("id, business_id, service_id, staff_id, customer_id, start_time, status")
     .eq("region_code", REGION)
     .eq("status", "scheduled")
     .gte("start_time", windowStart.toISOString())
@@ -63,6 +65,7 @@ async function runReminderJob(request: Request) {
 
   const appointmentRows = (appointments ?? []) as Array<{
     id: string;
+    business_id: string;
     service_id: string;
     staff_id: string | null;
     customer_id: string;
@@ -72,98 +75,111 @@ async function runReminderJob(request: Request) {
 
   const results = await Promise.all(
     filterRemindableAppointments(appointmentRows).map(async (appointment) => {
-      const scheduledFor = computeScheduledForIso(appointment.start_time, hoursBefore);
-
-      const { error: eventError } = await rpcCall(
-        supabase,
-        "create_appointment_reminder_event",
+      return processAppointmentReminder(
         {
-          appointment_id: appointment.id,
-          reminder_type: reminderType,
-          scheduled_for: scheduledFor,
-          meta: { hoursBefore, region: REGION },
-        },
-      );
+          upsertEvent: async (input) =>
+            rpcCall(supabase, "create_appointment_reminder_event", {
+              appointment_id: input.appointmentId,
+              reminder_type: input.reminderType,
+              channel: input.channel,
+              scheduled_for: input.scheduledFor,
+              meta: input.meta,
+            }),
+          claimEvent: async (input) =>
+            rpcCall(supabase, "claim_appointment_reminder_event", {
+              reminder_event_id: input.reminderEventId,
+              lock_timeout_seconds: input.lockTimeoutSeconds,
+              now_ts: input.now.toISOString(),
+              max_attempts: input.maxAttempts,
+            }),
+          markSent: async (input) => {
+            const { data, error } = await supabase
+              .from("appointment_reminder_events")
+              .update({
+                status: "sent",
+                sent_at: input.sentAt.toISOString(),
+                provider_message_id: input.providerMessageId,
+                updated_at: input.sentAt.toISOString(),
+              })
+              .eq("id", input.reminderEventId)
+              .eq("status", "sending")
+              .select("*")
+              .maybeSingle();
+            return { data: data ?? null, error };
+          },
+          markFailed: async (input) => {
+            const { data, error } = await supabase
+              .from("appointment_reminder_events")
+              .update({
+                status: input.status,
+                next_attempt_at: input.nextAttemptAt?.toISOString() ?? null,
+                last_error: input.error as Json,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", input.reminderEventId)
+              .eq("status", "sending")
+              .select("*")
+              .maybeSingle();
+            return { data: data ?? null, error };
+          },
+          loadLookups: async ({ appointment: appt }) => {
+            const [serviceRes, providerRes, customerRes] = await Promise.all([
+              supabase
+                .from(TABLES.services)
+                .select("id, name")
+                .eq("id", appt.service_id)
+                .maybeSingle(),
+              supabase
+                .from(TABLES.staff)
+                .select("id, full_name")
+                .eq("id", appt.staff_id ?? "")
+                .maybeSingle(),
+              supabase
+                .from(TABLES.customers)
+                .select("id, full_name, email")
+                .eq("id", appt.customer_id)
+                .maybeSingle(),
+            ]);
 
-      if (eventError) {
-        const message = String((eventError as { message?: string }).message ?? "").toLowerCase();
-        const code = String((eventError as { code?: string }).code ?? "");
-        const isUnique =
-          code === "23505" || message.includes("duplicate") || message.includes("unique");
+            if (serviceRes.error || providerRes.error || customerRes.error) {
+              return {
+                data: null,
+                error: {
+                  serviceError: serviceRes.error,
+                  providerError: providerRes.error,
+                  customerError: customerRes.error,
+                },
+              };
+            }
 
-        if (isUnique) {
-          console.info("reminder.skip_already_sent", {
-            appointmentId: appointment.id,
-            reminderType,
-            scheduledFor,
-          });
-          return { appointmentId: appointment.id, status: "skipped_already_sent" };
-        }
+            if (!serviceRes.data || !customerRes.data) {
+              return { data: null, error: { message: "lookup_missing" } };
+            }
 
-        console.error("reminder.event_insert_failed", { appointmentId: appointment.id, error: eventError });
-        return { appointmentId: appointment.id, status: "event_insert_failed" };
-      }
-
-      const [serviceRes, providerRes, customerRes] = await Promise.all([
-        supabase
-          .from(TABLES.services)
-          .select("id, name")
-          .eq("id", appointment.service_id)
-          .maybeSingle(),
-        supabase
-          .from(TABLES.staff)
-          .select("id, full_name")
-          .eq("id", appointment.staff_id ?? "")
-          .maybeSingle(),
-        supabase
-          .from(TABLES.customers)
-          .select("id, full_name, email")
-          .eq("id", appointment.customer_id)
-          .maybeSingle(),
-      ]);
-
-      if (serviceRes.error || providerRes.error || customerRes.error) {
-        console.error("reminder.lookup_failed", {
-          appointmentId: appointment.id,
-          serviceError: serviceRes.error,
-          providerError: providerRes.error,
-          customerError: customerRes.error,
-        });
-        return { appointmentId: appointment.id, status: "lookup_failed" };
-      }
-
-      if (!serviceRes.data || !customerRes.data) {
-        console.error("reminder.lookup_missing", { appointmentId: appointment.id });
-        return { appointmentId: appointment.id, status: "lookup_missing" };
-      }
-
-      const serviceRow = serviceRes.data as { id: string; name: string };
-      const providerRow = providerRes.data as { id: string; full_name: string | null } | null;
-      const customerRow = customerRes.data as { id: string; full_name: string; email: string };
-
-      try {
-        await sendAppointmentReminderEmail({
-          to: customerRow.email,
-          service: serviceRow.name,
-          provider: providerRow?.full_name ?? "Provider",
-          startTime: appointment.start_time,
+            return {
+              data: {
+                service: serviceRes.data as { id: string; name: string },
+                provider: providerRes.data as { id: string; full_name: string | null } | null,
+                customer: customerRes.data as { id: string; full_name: string; email: string },
+              },
+              error: null,
+            };
+          },
+          sendReminder: sendAppointmentReminderEmail,
+          now: () => new Date(),
+          logger: console,
+          jobRunId,
+          region: REGION,
           hoursBefore,
-        });
-        console.info("booking.reminder_sent", {
-          appointmentId: appointment.id,
           reminderType,
-          scheduledFor,
-        });
-        return { appointmentId: appointment.id, status: "sent" };
-      } catch (sendError) {
-        console.error("booking.reminder_failed", {
-          appointmentId: appointment.id,
-          error: sendError,
-          reminderType,
-          scheduledFor,
-        });
-        return { appointmentId: appointment.id, status: "failed" };
-      }
+          channel: REMINDER_CHANNEL,
+          maxAttempts: MAX_ATTEMPTS,
+          lockTimeoutSeconds: LOCK_TIMEOUT_SECONDS,
+          baseRetryMinutes: BASE_RETRY_MINUTES,
+          maxRetryMinutes: MAX_RETRY_MINUTES,
+        },
+        appointment,
+      );
     }),
   );
 
@@ -173,8 +189,10 @@ async function runReminderJob(request: Request) {
   }, {});
 
   return NextResponse.json({
+    jobRunId,
     hoursBefore,
     reminderType,
+    channel: REMINDER_CHANNEL,
     windowStart: windowStart.toISOString(),
     windowEnd: windowEnd.toISOString(),
     processed: results.length,
