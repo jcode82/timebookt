@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createCanonicalAppointment } from "@/domain/appointments";
+import { logAppointmentAuditEvent } from "@/domain/appointments/audit";
 import { sendBookingConfirmationEmail } from "@/lib/email/sendBookingConfirmationEmail";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
 import { TABLES } from "@/lib/constants";
@@ -87,6 +88,16 @@ export async function createBookingAction(input: CreateBookingActionInput): Prom
   };
 
   logBookingEvent("confirmed", { appointmentId: confirmation.appointmentId });
+
+  void logAppointmentAuditEvent({
+    appointmentId: confirmation.appointmentId,
+    eventType: "confirmed",
+    actorType: "user",
+    actorId: appointment.customerId,
+    metadata: {
+      start_time: confirmation.startTime,
+    },
+  });
 
   revalidatePath(`/${parsed.businessSlug}/book`);
 

@@ -4,6 +4,7 @@ import { TABLES } from "@/lib/constants";
 import { REGION } from "@/lib/env";
 import { sendAppointmentReminderEmail } from "@/lib/email/sendAppointmentReminderEmail";
 import { rpcCall } from "@/lib/supabase/rpc";
+import { logAppointmentAuditEvent } from "@/domain/appointments/audit";
 import { filterRemindableAppointments } from "./utils";
 import { processAppointmentReminder } from "./processor";
 import type { Json } from "../../../../supabase/types";
@@ -168,6 +169,17 @@ async function runReminderJob(request: Request) {
           sendReminder: sendAppointmentReminderEmail,
           now: () => new Date(),
           logger: console,
+          logAuditEvent: async (input) => {
+            await logAppointmentAuditEvent({
+              appointmentId: input.appointmentId,
+              eventType: "reminded",
+              actorType: "system",
+              actorId: null,
+              occurredAt: input.occurredAt,
+              metadata: input.metadata,
+              supabase,
+            });
+          },
           jobRunId,
           region: REGION,
           hoursBefore,

@@ -16,13 +16,19 @@ export type CreateAppointmentAgentOutput = AppointmentRecord;
 export async function createAppointmentAgentHook(
   input: CreateAppointmentAgentInput,
 ): Promise<CreateAppointmentAgentOutput> {
-  return createCanonicalAppointment(input);
+  return createCanonicalAppointment({
+    ...input,
+    actorType: input.actorType ?? "ai",
+  });
 }
 
 export async function cancelAppointmentAgentHook(
   input: CancelAppointmentInput,
 ): Promise<AppointmentRecord> {
-  return cancelAppointment(input);
+  return cancelAppointment({
+    ...input,
+    actorType: input.actorType ?? "ai",
+  });
 }
 
 export async function listAppointmentsAgentHook(
