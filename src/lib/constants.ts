@@ -14,6 +14,7 @@ export const TABLES = {
   staff: "staff",
   availabilityBlocks: "availability_blocks",
   appointments: "appointments",
+  appointmentReminderEvents: "appointment_reminder_events",
   customers: "customers",
   templates: "templates",
   auditLogs: "audit_logs",
