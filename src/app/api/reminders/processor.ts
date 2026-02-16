@@ -1,4 +1,5 @@
 import { ProviderConfigurationError } from "@/lib/email/sendAppointmentReminderEmail";
+import type { Json } from "../../../../supabase/types";
 
 export type ReminderAppointmentRow = {
   id: string;
@@ -79,6 +80,11 @@ export type ReminderProcessorDeps = {
   }) => Promise<{ messageId?: string | null }>;
   now: () => Date;
   logger: ReminderLogger;
+  logAuditEvent?: (input: {
+    appointmentId: string;
+    occurredAt: Date;
+    metadata: Json;
+  }) => Promise<void> | void;
   jobRunId: string;
   region: string;
   hoursBefore: number;
@@ -319,6 +325,28 @@ export async function processAppointmentReminder(
         duration_ms: deps.now().getTime() - startTime.getTime(),
       });
       return { appointmentId: appointment.id, status: "mark_sent_failed" };
+    }
+
+    if (deps.logAuditEvent) {
+      try {
+        await deps.logAuditEvent({
+          appointmentId: appointment.id,
+          occurredAt: deps.now(),
+          metadata: {
+            reminder_type: deps.reminderType,
+            channel: deps.channel,
+            scheduled_for: scheduledFor,
+            provider_message_id: response.messageId ?? null,
+            job_run_id: deps.jobRunId,
+          },
+        });
+      } catch (error) {
+        deps.logger.error("reminder.audit_log_failed", {
+          ...attemptLog,
+          outcome: "audit_log_failed",
+          error: serializeError(error),
+        });
+      }
     }
 
     deps.logger.info("reminder.sent", {

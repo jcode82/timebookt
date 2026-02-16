@@ -10,7 +10,18 @@ vi.mock("@/lib/env", () => ({
 }));
 
 vi.mock("@/lib/supabase/client", () => ({
-  getSupabaseAdmin: () => ({}),
+  getSupabaseAdmin: () => ({
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          eq: () => ({
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          }),
+        }),
+      }),
+      insert: vi.fn().mockResolvedValue({ error: null }),
+    }),
+  }),
 }));
 
 vi.mock("@/lib/supabase/rpc", () => ({

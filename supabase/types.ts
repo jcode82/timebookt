@@ -235,6 +235,28 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["audit_logs"]["Insert"]>;
         Relationships: [];
       };
+      appointment_audit_logs: {
+        Row: {
+          id: string;
+          appointment_id: string;
+          event_type: string;
+          occurred_at: string;
+          actor_type: string;
+          actor_id: string | null;
+          metadata: Json | null;
+        };
+        Insert: {
+          id?: string;
+          appointment_id: string;
+          event_type: string;
+          occurred_at?: string;
+          actor_type: string;
+          actor_id?: string | null;
+          metadata?: Json | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["appointment_audit_logs"]["Insert"]>;
+        Relationships: [];
+      };
       waitlist: {
         Row: {
           id: string;

@@ -35,6 +35,8 @@ export interface CanonicalAppointmentInput {
   customerEmail: string;
   customerPhone?: string;
   notes?: string;
+  actorType?: "system" | "user" | "staff" | "ai";
+  actorId?: string | null;
 }
 
 export interface ProviderAvailabilityRequest {
@@ -62,6 +64,8 @@ export interface BookingStatusDetails {
 export interface CancelAppointmentInput {
   appointmentId: string;
   cancellationReason?: string;
+  actorType?: "system" | "user" | "staff" | "ai";
+  actorId?: string | null;
 }
 
 export interface RescheduleAppointmentInput {
@@ -70,6 +74,8 @@ export interface RescheduleAppointmentInput {
   endTime: string;
   reason?: string;
   source?: string;
+  actorType?: "system" | "user" | "staff" | "ai";
+  actorId?: string | null;
 }
 
 export interface AvailabilityBlock {

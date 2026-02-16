@@ -6,6 +6,7 @@ import { createCustomer } from "@/domain/customers";
 import { rpcCall } from "@/lib/supabase/rpc";
 import { REGION } from "@/lib/env";
 import type { Tables, TablesInsert, TablesUpdate } from "../../../supabase/types";
+import { logAppointmentAuditEvent } from "./audit";
 import type {
   AppointmentRecord,
   AvailabilityBlock,
@@ -56,6 +57,8 @@ const canonicalAppointmentSchema = z
     customerEmail: z.string().email(),
     customerPhone: z.string().optional(),
     notes: z.string().optional(),
+    actorType: z.enum(["system", "user", "staff", "ai"]).optional(),
+    actorId: z.string().uuid().nullable().optional(),
   })
   .refine(
     (value) => new Date(value.endTime).getTime() > new Date(value.startTime).getTime(),
@@ -197,7 +200,7 @@ export async function createCanonicalAppointment(
       phone: payload.customerPhone,
     });
 
-    return await createAppointment({
+    const appointment = await createAppointment({
       businessId: serviceRecord.business_id,
       customerId: customer.id,
       serviceId: payload.serviceId,
@@ -206,6 +209,26 @@ export async function createCanonicalAppointment(
       endTime: payload.endTime,
       notes: payload.notes,
     });
+
+    const actorType = payload.actorType ?? "user";
+    const actorId = payload.actorId ?? (actorType === "user" ? customer.id : null);
+
+    void logAppointmentAuditEvent({
+      appointmentId: appointment.id,
+      eventType: "created",
+      actorType,
+      actorId,
+      metadata: {
+        business_id: serviceRecord.business_id,
+        customer_id: customer.id,
+        service_id: payload.serviceId,
+        staff_id: payload.providerId,
+        start_time: appointment.startTime,
+        end_time: appointment.endTime,
+      },
+    });
+
+    return appointment;
   } catch (error) {
     console.error("Unable to create appointment", { error, input: payload });
     if (error instanceof DomainError) {
@@ -279,7 +302,21 @@ export async function cancelAppointment(input: CancelAppointmentInput): Promise<
     throw new DomainError("Unable to cancel appointment", { error, input });
   }
 
-  return mapAppointment(data);
+  const appointment = mapAppointment(data);
+
+  void logAppointmentAuditEvent({
+    appointmentId: appointment.id,
+    eventType: "cancelled",
+    actorType: input.actorType ?? "system",
+    actorId: input.actorId ?? null,
+    metadata: {
+      cancellation_reason: appointment.cancellationReason ?? null,
+      status: appointment.status,
+    },
+    supabase,
+  });
+
+  return appointment;
 }
 
 export async function rescheduleAppointment(
@@ -301,6 +338,24 @@ export async function rescheduleAppointment(
   }
 
   const supabase = getSupabaseAdmin();
+  let previousTimes: { start_time: string; end_time: string } | null = null;
+
+  try {
+    const { data } = await supabase
+      .from(TABLES.appointments)
+      .select("start_time, end_time")
+      .eq("id", input.appointmentId)
+      .eq("region_code", REGION)
+      .maybeSingle();
+    if (data) {
+      previousTimes = data as { start_time: string; end_time: string };
+    }
+  } catch (error) {
+    console.warn("appointments.audit_log_prefetch_failed", {
+      error,
+      appointmentId: input.appointmentId,
+    });
+  }
 
   const { data, error } = await rpcCall<Tables<"appointments">>(
     supabase,
@@ -326,7 +381,25 @@ export async function rescheduleAppointment(
     throw new DomainError("Unable to reschedule appointment", { error, input });
   }
 
-  return mapAppointment(data);
+  const appointment = mapAppointment(data);
+
+  void logAppointmentAuditEvent({
+    appointmentId: appointment.id,
+    eventType: "rescheduled",
+    actorType: input.actorType ?? "system",
+    actorId: input.actorId ?? null,
+    metadata: {
+      from_start_time: previousTimes?.start_time ?? null,
+      from_end_time: previousTimes?.end_time ?? null,
+      to_start_time: appointment.startTime,
+      to_end_time: appointment.endTime,
+      reason: input.reason ?? null,
+      source: input.source ?? null,
+    },
+    supabase,
+  });
+
+  return appointment;
 }
 
 export async function listAppointmentsForBusiness(
