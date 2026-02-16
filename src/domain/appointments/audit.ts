@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase/client";
 import { TABLES } from "@/lib/constants";
-import type { Json } from "../../../supabase/types";
+import { DomainError } from "@/lib/errors";
+import type { Json, Tables } from "../../../supabase/types";
 
 export type AppointmentAuditActorType = "system" | "user" | "staff" | "ai";
 export type AppointmentAuditEventType =
@@ -19,6 +20,8 @@ export type AppointmentAuditLogInput = {
   metadata?: Json | null;
   supabase?: ReturnType<typeof getSupabaseAdmin>;
 };
+
+export type AppointmentAuditLogRow = Tables<"appointment_audit_logs">;
 
 export async function logAppointmentAuditEvent(input: AppointmentAuditLogInput): Promise<void> {
   const supabase = input.supabase ?? getSupabaseAdmin();
@@ -46,4 +49,29 @@ export async function logAppointmentAuditEvent(input: AppointmentAuditLogInput):
       eventType: input.eventType,
     });
   }
+}
+
+export async function listAppointmentAuditLogsForSupport(input: {
+  appointmentId: string;
+  limit?: number;
+  supabase?: ReturnType<typeof getSupabaseAdmin>;
+}): Promise<AppointmentAuditLogRow[]> {
+  const supabase = input.supabase ?? getSupabaseAdmin();
+  const limit = input.limit ?? 100;
+
+  const { data, error } = await supabase
+    .from(TABLES.appointmentAuditLogs)
+    .select("*")
+    .eq("appointment_id", input.appointmentId)
+    .order("occurred_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new DomainError("Unable to load appointment audit logs", {
+      error,
+      appointmentId: input.appointmentId,
+    });
+  }
+
+  return (data ?? []) as AppointmentAuditLogRow[];
 }
