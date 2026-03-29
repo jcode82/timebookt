@@ -6,8 +6,8 @@ const baseAvailabilityRow = {
   staff_id: "staff-1",
   region_code: "test-region",
   day_of_week: 1,
-  start_time: "2026-02-16T14:00:00.000Z",
-  end_time: "2026-02-16T15:00:00.000Z",
+  start_time: "14:00:00",
+  end_time: "15:00:00",
   capacity: 1,
   created_at: "2026-02-01T00:00:00.000Z",
 };

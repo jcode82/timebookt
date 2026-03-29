@@ -90,6 +90,6 @@ export interface AvailabilityBlock {
 
 export interface AvailabilityRequest {
   businessId: string;
-  startDate: string;
-  endDate: string;
+  providerId?: string;
+  dayOfWeek?: number;
 }

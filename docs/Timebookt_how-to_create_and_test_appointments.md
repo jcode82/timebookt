@@ -89,7 +89,9 @@ Minimum required relationships:
 Availability blocks must include:
 - staff_id
 - business_id
-- start_time / end_time
+- day_of_week (`0=Sun ... 6=Sat`, UTC)
+- start_time / end_time (`time`, UTC, e.g. `14:00:00` to `15:00:00`)
+- capacity (>= 1)
 
 These blocks are what the booking UI renders.
 
@@ -177,4 +179,3 @@ Close this document. Check Jira.
 **This HOW‑TO exists to protect the system from cleverness.**
 
 Cleverness comes later.
-

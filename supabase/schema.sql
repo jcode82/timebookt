@@ -60,9 +60,11 @@ create table if not exists public.availability_blocks (
   staff_id uuid references public.staff(id) on delete cascade,
   region_code text not null default 'global',
   day_of_week smallint not null check (day_of_week between 0 and 6),
-  start_time timestamptz not null,
-  end_time timestamptz not null,
+  start_time time not null,
+  end_time time not null,
   capacity integer not null default 1,
+  constraint availability_blocks_capacity_positive_check check (capacity >= 1),
+  constraint availability_blocks_time_window_check check (end_time > start_time),
   created_at timestamptz not null default timezone('utc', now())
 );
 
