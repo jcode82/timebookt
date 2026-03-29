@@ -84,8 +84,14 @@ const buildDayRange = (dateStr: string) => {
 };
 
 const applyTimeToDate = (dateBase: Date, timeIso: string) => {
-  const time = parseTimestamp(timeIso);
-  if (!time) {
+  const match = /^(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,6})?)?$/.exec(timeIso);
+  if (!match) {
+    return null;
+  }
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3] ?? "0");
+  if (hours > 23 || minutes > 59 || seconds > 59) {
     return null;
   }
   return new Date(
@@ -93,9 +99,9 @@ const applyTimeToDate = (dateBase: Date, timeIso: string) => {
       dateBase.getUTCFullYear(),
       dateBase.getUTCMonth(),
       dateBase.getUTCDate(),
-      time.getUTCHours(),
-      time.getUTCMinutes(),
-      0,
+      hours,
+      minutes,
+      seconds,
       0,
     ),
   );
@@ -581,13 +587,26 @@ export async function getAvailability(
   request: AvailabilityRequest,
 ): Promise<AvailabilityBlock[]> {
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
+  let query = supabase
     .from("availability_blocks")
     .select()
     .eq("business_id", request.businessId)
     .eq("region_code", REGION)
-    .gte("start_time", request.startDate)
-    .lte("end_time", request.endDate);
+    .order("day_of_week", { ascending: true })
+    .order("start_time", { ascending: true });
+
+  if (request.providerId) {
+    query = query.eq("staff_id", request.providerId);
+  }
+
+  if (typeof request.dayOfWeek === "number") {
+    if (request.dayOfWeek < 0 || request.dayOfWeek > 6) {
+      throw new DomainError("Invalid dayOfWeek in availability request", { request });
+    }
+    query = query.eq("day_of_week", request.dayOfWeek);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new DomainError("Unable to load availability", { error, request });

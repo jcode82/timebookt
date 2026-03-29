@@ -1,6 +1,6 @@
 # Scheduling Semantics (Current State)
 
-This document records the current, authoritative scheduling behavior in TimeBookt as of TBKT-71.
+This document records the current, authoritative scheduling behavior in TimeBookt as of TBKT-72.
 
 ## Decision
 
@@ -13,7 +13,7 @@ Operationally, booking logic matches blocks by:
 - `day_of_week` (UTC, `0=Sunday ... 6=Saturday`)
 - appointment time-of-day window contained within block time-of-day window (UTC)
 
-`start_time` / `end_time` are stored as full timestamps but are treated as time-of-day carriers for weekly matching.
+`start_time` / `end_time` are stored as SQL `time` values (UTC time-of-day only).
 
 ## Availability Block Semantics
 
@@ -58,28 +58,20 @@ For a given UTC date:
 ## Override / Conflict Semantics
 
 When multiple blocks match the same provider/day/time window, booking RPCs select one block using:
-- `ORDER BY ab.start_time DESC LIMIT 1`
+- `ORDER BY ab.created_at DESC, ab.start_time DESC LIMIT 1`
 
 This is the current override stabilizer, intended to prefer a "newer" rule when multiple rows could match.
-For current behavior, "newer" means **higher `start_time` value** (not `created_at` or explicit rule version).
-`created_at` exists on `availability_blocks` but is not used for override selection today.
+For current behavior, "newer" means **most recent `created_at`**, with `start_time DESC` as a deterministic tie-breaker.
 
-## Current Stabilizers (Temporary)
+## Current Stabilizers
 
-The following are temporary stabilizers to reduce ambiguity until schema/semantics are normalized:
-
-- **DESC block selection stabilizer:** `ORDER BY ab.start_time DESC LIMIT 1` when multiple rules match.
-- **Date-match stabilizer in RPCs:** `(ab.start_time at time zone 'utc')::date = (appointment_start at time zone 'utc')::date` to avoid selecting blocks from a different UTC calendar date that share weekday/time.
-- **Advisory lock fallback:** when no block matches, lock per provider+UTC-date to reduce race conditions while using default capacity `1`.
-
-These are implementation stabilizers, not final domain semantics.
+- **Rule tie-breaker:** when multiple rules match, RPCs select the most recent row using `ORDER BY created_at DESC, start_time DESC LIMIT 1`.
+- **Advisory lock fallback:** when no rule matches, lock per provider+UTC-date to reduce race conditions while using default capacity `1`.
 
 ## Known Limitations
 
-- Stored full timestamps vs recurring intent: data model still mixes absolute timestamps with weekly-rule behavior.
 - `day_of_week` and time comparisons are UTC-based; business timezone is not applied in availability matching.
 - No hard "outside availability" rejection when no block matches; default capacity `1` still allows booking if no overlap.
-- Reschedule overlap query currently scopes by `staff_id + region_code` (not `business_id`), which can be a cross-tenant risk if provider IDs are not globally isolated.
 - Slot generation is fixed to 30-minute increments and may not align with all service durations.
 - Cross-midnight recurring windows are not modeled explicitly (single-day projection logic).
 
@@ -88,7 +80,7 @@ These are implementation stabilizers, not final domain semantics.
 - Slot generation and client-facing availability:
   - `src/domain/appointments/actions.ts` (`getProviderAvailabilityForDate`)
 - Booking and reschedule capacity enforcement:
-  - `supabase/migrations/20250317_fix_capacity_block_date_match.sql`
+  - `supabase/migrations/20260219_migrate_availability_blocks_to_recurring_rules.sql`
 - Capacity/overlap tests:
   - `src/domain/appointments/__tests__/availabilitySlots.test.ts`
   - `docs/testing/manual/TBKT-69-capacity-overlaps.md`

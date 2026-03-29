@@ -1,7 +1,7 @@
 Manual Test Plan — TBKT-69 Support capacity-based overlapping bookings
 Preconditions
 
-Latest migration applied: 20250315_capacity_based_overlaps.sql
+Latest migration applied: 20260219_migrate_availability_blocks_to_recurring_rules.sql
 
 Server running locally
 
@@ -25,10 +25,10 @@ values (gen_random_uuid(),
         '<BUSINESS_ID>',
         '<PROVIDER_ID>',
         'fl',
-        '2026-02-16T14:00:00Z',
-        '2026-02-16T15:00:00Z',
+        '14:00:00',
+        '15:00:00',
         2,
-        extract(dow from '2026-02-16T00:00:00Z'::timestamptz)::smallint
+        1
        );
 
 
