@@ -1,10 +1,11 @@
 # Scheduling Semantics (Current State)
 
-This document records the current, authoritative scheduling behavior in TimeBookt as of TBKT-72.
+This document records the current, authoritative scheduling behavior in TimeBookt as of TBKT-73.
 
 ## Decision
 
 Availability blocks are interpreted as **recurring weekly rules**.
+Availability exceptions are interpreted as **date-specific overrides**.
 
 Operationally, booking logic matches blocks by:
 - `business_id`
@@ -14,6 +15,20 @@ Operationally, booking logic matches blocks by:
 - appointment time-of-day window contained within block time-of-day window (UTC)
 
 `start_time` / `end_time` are stored as SQL `time` values (UTC time-of-day only).
+
+## Availability Exception Semantics
+
+An availability exception defines a provider-specific override for one UTC date:
+- The provider (`staff_id`) and tenant scope (`business_id`, `region_code`)
+- A specific UTC date (`exception_date`)
+- Whether the provider is closed for that date (`is_closed`)
+- An optional replacement time window (`start_time`, `end_time`) for open dates
+- A replacement capacity value (`capacity`)
+
+When an exception exists for a provider/date, it takes precedence over recurring rules:
+- Closed exceptions produce no slots and reject bookings/reschedules for that date.
+- Open exceptions replace the recurring windows for that date with the exception window and capacity.
+- Bookings outside an open exception window are rejected, even if a recurring rule would otherwise match.
 
 ## Availability Block Semantics
 
@@ -35,6 +50,7 @@ Current invariants enforced by RPC and slot generation:
 - Two appointments overlap when `existing.start < candidate.end` and `existing.end > candidate.start`.
 - Canceled appointments do not count toward overlap.
 - Effective capacity for a matched block is `max(coalesce(capacity, 1), 1)`.
+- Effective capacity for a matched exception is `max(coalesce(capacity, 1), 1)`.
 - A booking/reschedule is rejected when `overlap_count >= effective_capacity`.
 - If overlap is below capacity, booking/reschedule is allowed.
 
@@ -45,10 +61,15 @@ If no availability block matches, booking and reschedule logic falls back to cap
 This means availability blocks currently act as a **capacity policy source**, not a hard allowlist.
 This is intentional for now as legacy/migration-safe behavior during semantics normalization.
 
+This fallback applies only when there is no date exception. If a date exception exists, the exception is the hard allowlist for that provider/date.
+
 ## Slot Picker Semantics (`getProviderAvailabilityForDate`)
 
 For a given UTC date:
-- Select blocks by exact `day_of_week` match.
+- Select the date exception for the provider/date, if one exists.
+- If the exception is closed, return no slots.
+- If the exception is open, use only the exception's replacement window and capacity.
+- If no exception exists, select blocks by exact `day_of_week` match.
 - Project each block's time-of-day onto that date.
 - Generate 30-minute slots inside each block window.
 - Count overlapping non-canceled appointments for each slot.
@@ -66,6 +87,7 @@ For current behavior, "newer" means **most recent `created_at`**, with `start_ti
 ## Current Stabilizers
 
 - **Rule tie-breaker:** when multiple rules match, RPCs select the most recent row using `ORDER BY created_at DESC, start_time DESC LIMIT 1`.
+- **Exception precedence:** an exception row replaces recurring rules for that provider/date.
 - **Advisory lock fallback:** when no rule matches, lock per provider+UTC-date to reduce race conditions while using default capacity `1`.
 
 ## Known Limitations
@@ -80,7 +102,7 @@ For current behavior, "newer" means **most recent `created_at`**, with `start_ti
 - Slot generation and client-facing availability:
   - `src/domain/appointments/actions.ts` (`getProviderAvailabilityForDate`)
 - Booking and reschedule capacity enforcement:
-  - `supabase/migrations/20260219_migrate_availability_blocks_to_recurring_rules.sql`
+  - `supabase/migrations/20260220_add_availability_exceptions.sql`
 - Capacity/overlap tests:
   - `src/domain/appointments/__tests__/availabilitySlots.test.ts`
   - `docs/testing/manual/TBKT-69-capacity-overlaps.md`

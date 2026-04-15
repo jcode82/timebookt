@@ -43,7 +43,7 @@ const isCapacityOverlapError = (error: { code?: string; message?: string } | nul
   if (!error) return false;
   if (error.code === "23P01") return true;
   if (error.code !== "P0001") return false;
-  return /capacity|overlap/i.test(error.message ?? "");
+  return /availability|capacity|overlap/i.test(error.message ?? "");
 };
 
 const canonicalAppointmentSchema = z
@@ -116,6 +116,11 @@ const mapAvailability = (row: Tables<"availability_blocks">): AvailabilityBlock 
   endTime: row.end_time,
   capacity: row.capacity,
 });
+
+type SlotAvailabilityWindow = Pick<
+  Tables<"availability_blocks">,
+  "start_time" | "end_time" | "capacity"
+>;
 
 export async function createCanonicalAppointment(
   input: CanonicalAppointmentInput,
@@ -511,7 +516,7 @@ export async function getProviderAvailabilityForDate(
   const { dayStart, dayEnd, dayOfWeek } = buildDayRange(date);
   const supabase = getSupabaseAdmin();
 
-  const [availabilityRes, appointmentsRes] = await Promise.all([
+  const [availabilityRes, exceptionsRes, appointmentsRes] = await Promise.all([
     supabase
       .from(TABLES.availabilityBlocks)
       .select("id, staff_id, day_of_week, start_time, end_time, capacity")
@@ -519,6 +524,15 @@ export async function getProviderAvailabilityForDate(
       .eq("business_id", businessId)
       .eq("day_of_week", dayOfWeek)
       .eq("region_code", REGION),
+    supabase
+      .from(TABLES.availabilityExceptions)
+      .select("id, staff_id, exception_date, is_closed, start_time, end_time, capacity")
+      .eq("staff_id", providerId)
+      .eq("business_id", businessId)
+      .eq("exception_date", date)
+      .eq("region_code", REGION)
+      .order("created_at", { ascending: false })
+      .limit(1),
     supabase
       .from(TABLES.appointments)
       .select("id, start_time, end_time")
@@ -535,6 +549,13 @@ export async function getProviderAvailabilityForDate(
     });
   }
 
+  if (exceptionsRes.error) {
+    throw new DomainError("Unable to load availability exceptions", {
+      error: exceptionsRes.error,
+      request,
+    });
+  }
+
   if (appointmentsRes.error) {
     throw new DomainError("Unable to load appointments", {
       error: appointmentsRes.error,
@@ -543,7 +564,20 @@ export async function getProviderAvailabilityForDate(
   }
 
   const availabilityRows = (availabilityRes.data ?? []) as Tables<"availability_blocks">[];
+  const exceptionRows = (exceptionsRes.data ?? []) as Tables<"availability_exceptions">[];
   const appointmentRows = (appointmentsRes.data ?? []) as Tables<"appointments">[];
+  const exception = exceptionRows[0];
+  const effectiveAvailabilityRows: SlotAvailabilityWindow[] = exception
+    ? exception.is_closed || !exception.start_time || !exception.end_time
+      ? []
+      : [
+          {
+            start_time: exception.start_time,
+            end_time: exception.end_time,
+            capacity: exception.capacity,
+          },
+        ]
+    : availabilityRows;
   const dayStartMs = dayStart.getTime();
   const dayEndMs = dayEnd.getTime();
   const filteredAppointments = appointmentRows.filter((appt) => {
@@ -555,7 +589,7 @@ export async function getProviderAvailabilityForDate(
   const slots: ProviderAvailabilitySlot[] = [];
   const slotMs = SLOT_MINUTES * 60 * 1000;
 
-  availabilityRows.forEach((block) => {
+  effectiveAvailabilityRows.forEach((block) => {
     if (!block.start_time || !block.end_time) return;
     const blockStart = applyTimeToDate(dayStart, block.start_time);
     const blockEnd = applyTimeToDate(dayStart, block.end_time);

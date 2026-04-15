@@ -147,6 +147,36 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["availability_blocks"]["Insert"]>;
         Relationships: [];
       };
+      availability_exceptions: {
+        Row: {
+          id: string;
+          business_id: string;
+          staff_id: string;
+          region_code: string;
+          exception_date: string;
+          is_closed: boolean;
+          start_time: string | null;
+          end_time: string | null;
+          capacity: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_id: string;
+          staff_id: string;
+          region_code?: string;
+          exception_date: string;
+          is_closed?: boolean;
+          start_time?: string | null;
+          end_time?: string | null;
+          capacity?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["availability_exceptions"]["Insert"]>;
+        Relationships: [];
+      };
       appointments: {
         Row: {
           id: string;

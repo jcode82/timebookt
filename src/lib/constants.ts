@@ -13,6 +13,7 @@ export const TABLES = {
   services: "services",
   staff: "staff",
   availabilityBlocks: "availability_blocks",
+  availabilityExceptions: "availability_exceptions",
   appointments: "appointments",
   appointmentAuditLogs: "appointment_audit_logs",
   appointmentReminderEvents: "appointment_reminder_events",
