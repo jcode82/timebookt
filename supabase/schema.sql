@@ -68,6 +68,26 @@ create table if not exists public.availability_blocks (
   created_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.availability_exceptions (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  staff_id uuid not null references public.staff(id) on delete cascade,
+  region_code text not null default 'global',
+  exception_date date not null,
+  is_closed boolean not null default false,
+  start_time time,
+  end_time time,
+  capacity integer not null default 1,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  constraint availability_exceptions_capacity_positive_check check (capacity >= 1),
+  constraint availability_exceptions_window_check check (
+    is_closed
+    or (start_time is not null and end_time is not null and end_time > start_time)
+  ),
+  unique (business_id, staff_id, region_code, exception_date)
+);
+
 create table if not exists public.appointments (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses(id) on delete cascade,
@@ -168,6 +188,7 @@ alter table public.staff enable row level security;
 alter table public.services enable row level security;
 alter table public.customers enable row level security;
 alter table public.availability_blocks enable row level security;
+alter table public.availability_exceptions enable row level security;
 alter table public.appointments enable row level security;
 alter table public.templates enable row level security;
 alter table public.audit_logs enable row level security;
@@ -221,3 +242,12 @@ create policy "Staff can read appointment audit logs"
 
 create index if not exists businesses_slug_region_idx
   on public.businesses (slug, region_code);
+
+create index if not exists availability_exceptions_provider_date_idx
+  on public.availability_exceptions (business_id, staff_id, region_code, exception_date);
+
+create policy "Service role can manage availability exceptions"
+  on public.availability_exceptions
+  for all
+  using (auth.role() = 'service_role')
+  with check (auth.role() = 'service_role');

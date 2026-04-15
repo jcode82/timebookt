@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const sendMock = vi.fn();
 
@@ -19,7 +19,8 @@ let GET: typeof import("../route").GET;
 let supabase: ReturnType<typeof import("@/lib/supabase/client").getSupabaseAdmin>;
 let ProviderConfigurationError: typeof import("@/lib/email/sendAppointmentReminderEmail").ProviderConfigurationError;
 let region = "global";
-let businessId: string | null = null;
+const businessIds = new Set<string>();
+let originalRegion: string | undefined;
 
 const requireEnv = (key: string) => {
   const value = process.env[key];
@@ -60,7 +61,7 @@ const seedAppointment = async (startTimeIso: string) => {
     throw new Error(`Failed to create business: ${businessError?.message ?? "unknown"}`);
   }
 
-  businessId = business.id;
+  businessIds.add(business.id);
 
   const { data: staff, error: staffError } = await supabase
     .from("staff")
@@ -147,14 +148,52 @@ const fetchReminderEvents = async (appointmentId: string) => {
   return data ?? [];
 };
 
+const cleanupSeededBusinesses = async () => {
+  if (businessIds.size === 0) return;
+
+  const ids = Array.from(businessIds);
+  const { data: appointments, error: appointmentsError } = await supabase
+    .from("appointments")
+    .select("id")
+    .in("business_id", ids);
+
+  if (appointmentsError) {
+    throw new Error(`Failed to query seeded appointments: ${appointmentsError.message}`);
+  }
+
+  const appointmentIds = (appointments ?? []).map((appointment) => appointment.id);
+  if (appointmentIds.length > 0) {
+    const { error: reminderError } = await supabase
+      .from("appointment_reminder_events")
+      .delete()
+      .in("appointment_id", appointmentIds);
+
+    if (reminderError) {
+      throw new Error(`Failed to delete reminder events: ${reminderError.message}`);
+    }
+  }
+
+  const { error: appointmentError } = await supabase
+    .from("appointments")
+    .update({ status: "canceled" })
+    .in("business_id", ids);
+
+  if (appointmentError) {
+    throw new Error(`Failed to cancel seeded appointments: ${appointmentError.message}`);
+  }
+
+  businessIds.clear();
+};
+
 describe("reminders route integration", () => {
   beforeAll(async () => {
     requireEnv("NEXT_PUBLIC_SUPABASE_URL");
     requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
     requireEnv("SUPABASE_SERVICE_ROLE_KEY");
     process.env.CRON_SECRET ??= "test-cron-secret";
-    process.env.NEXT_PUBLIC_TIMEBOOKT_REGION ??= `test-${Date.now()}`;
-    region = process.env.NEXT_PUBLIC_TIMEBOOKT_REGION ?? "global";
+    originalRegion = process.env.NEXT_PUBLIC_TIMEBOOKT_REGION;
+    region = `test-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    process.env.NEXT_PUBLIC_TIMEBOOKT_REGION = region;
 
     const { getSupabaseAdmin } = await import("@/lib/supabase/client");
     supabase = getSupabaseAdmin();
@@ -163,16 +202,20 @@ describe("reminders route integration", () => {
     ({ ProviderConfigurationError } = await import("@/lib/email/sendAppointmentReminderEmail"));
   });
 
+  afterAll(() => {
+    if (originalRegion === undefined) {
+      delete process.env.NEXT_PUBLIC_TIMEBOOKT_REGION;
+      return;
+    }
+    process.env.NEXT_PUBLIC_TIMEBOOKT_REGION = originalRegion;
+  });
+
   beforeEach(() => {
     sendMock.mockReset();
-    businessId = null;
   });
 
   afterEach(async () => {
-    if (businessId) {
-      await supabase.from("businesses").delete().eq("id", businessId);
-      businessId = null;
-    }
+    await cleanupSeededBusinesses();
   });
 
   it("sends once and dedupes subsequent runs", async () => {
