@@ -14,6 +14,7 @@ import type {
   BookingStatusDetails,
   CancelAppointmentInput,
   CanonicalAppointmentInput,
+  CreateAvailabilityBlockInput,
   CreateAppointmentInput,
   ProviderAvailabilityRequest,
   ProviderAvailabilitySlot,
@@ -644,6 +645,44 @@ export async function getAvailability(
 
   if (error) {
     throw new DomainError("Unable to load availability", { error, request });
+  }
+
+  return (data ?? []).map(mapAvailability);
+}
+
+export async function createAvailabilityBlocks(
+  inputs: CreateAvailabilityBlockInput[],
+): Promise<AvailabilityBlock[]> {
+  if (inputs.length < 1) {
+    throw new DomainError("At least one availability block is required");
+  }
+
+  for (const input of inputs) {
+    if (input.dayOfWeek < 0 || input.dayOfWeek > 6) {
+      throw new DomainError("Availability day must be between 0 and 6", { input });
+    }
+    if (input.endTime <= input.startTime) {
+      throw new DomainError("Availability end time must be after start time", { input });
+    }
+  }
+
+  const supabase = getSupabaseAdmin();
+  const payload: TablesInsert<"availability_blocks">[] = inputs.map((input) => ({
+    business_id: input.businessId,
+    region_code: REGION,
+    day_of_week: input.dayOfWeek,
+    start_time: input.startTime,
+    end_time: input.endTime,
+    capacity: Math.max(input.capacity ?? 1, 1),
+  }));
+
+  const { data, error } = await supabase
+    .from(TABLES.availabilityBlocks)
+    .insert(payload)
+    .select();
+
+  if (error) {
+    throw new DomainError("Unable to create availability blocks", { error, inputs });
   }
 
   return (data ?? []).map(mapAvailability);

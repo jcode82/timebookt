@@ -93,3 +93,11 @@ export interface AvailabilityRequest {
   providerId?: string;
   dayOfWeek?: number;
 }
+
+export interface CreateAvailabilityBlockInput {
+  businessId: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  capacity?: number;
+}

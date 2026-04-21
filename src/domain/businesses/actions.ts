@@ -43,6 +43,7 @@ const mapBusiness = (row: Tables<typeof TABLES.businesses>): BusinessProfile => 
   contactEmail: row.contact_email,
   contactPhone: row.contact_phone,
   settings: isBusinessSettings(row.settings) ? row.settings : defaultSettings(),
+  isOnboarded: row.is_onboarded,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -55,7 +56,7 @@ export async function createBusiness(payload: CreateBusinessInput): Promise<Busi
       region: REGION,
     });
   }
-  const slug = `${toSlug(payload.name)}-${toSlug(payload.regionCode)}`;
+  const slug = payload.slug ? toSlug(payload.slug) : `${toSlug(payload.name)}-${toSlug(payload.regionCode)}`;
 
   const insert: TablesInsert<typeof TABLES.businesses> = {
     slug,
@@ -84,6 +85,64 @@ export async function createBusiness(payload: CreateBusinessInput): Promise<Busi
   }
 
   return mapBusiness(data);
+}
+
+export async function completeBusinessOnboarding(businessId: string): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  const { data: business, error: businessError } = await supabase
+    .from(TABLES.businesses)
+    .select("id")
+    .eq("id", businessId)
+    .eq("region_code", REGION)
+    .maybeSingle();
+
+  if (businessError || !business) {
+    throw new DomainError("Unable to load business for onboarding completion", {
+      businessId,
+      error: businessError,
+    });
+  }
+
+  const [servicesRes, availabilityRes] = await Promise.all([
+    supabase
+      .from(TABLES.services)
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .eq("region_code", REGION)
+      .eq("is_active", true),
+    supabase
+      .from(TABLES.availabilityBlocks)
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .eq("region_code", REGION),
+  ]);
+
+  if (servicesRes.error || availabilityRes.error) {
+    throw new DomainError("Unable to validate onboarding requirements", {
+      businessId,
+      servicesError: servicesRes.error,
+      availabilityError: availabilityRes.error,
+    });
+  }
+
+  if ((servicesRes.count ?? 0) < 1 || (availabilityRes.count ?? 0) < 1) {
+    throw new DomainError("At least one service and one availability block are required");
+  }
+
+  const { error: updateError } = await supabase
+    .from(TABLES.businesses)
+    .update({
+      is_onboarded: true,
+    })
+    .eq("id", businessId)
+    .eq("region_code", REGION);
+
+  if (updateError) {
+    throw new DomainError("Unable to persist onboarding completion", {
+      businessId,
+      error: updateError,
+    });
+  }
 }
 
 export async function getBusinessBySlug(slug: string): Promise<BusinessProfile | null> {

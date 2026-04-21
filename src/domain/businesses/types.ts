@@ -20,11 +20,13 @@ export interface BusinessProfile {
   contactEmail: string;
   contactPhone?: string | null;
   settings: BusinessSettings;
+  isOnboarded: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CreateBusinessInput {
+  slug?: string;
   name: string;
   regionCode: string;
   timezone: string;

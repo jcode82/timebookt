@@ -8,3 +8,12 @@ export interface ServiceRecord {
   currency: string;
   isActive: boolean;
 }
+
+export interface CreateServiceInput {
+  businessId: string;
+  name: string;
+  description?: string;
+  durationMinutes: number;
+  priceCents: number;
+  currency?: string;
+}

@@ -11,6 +11,7 @@ create table if not exists public.businesses (
   timezone text not null default 'America/New_York',
   contact_email text not null,
   contact_phone text,
+  is_onboarded boolean not null default false,
   settings jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())

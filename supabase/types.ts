@@ -19,6 +19,7 @@ export type Database = {
           timezone: string;
           contact_email: string;
           contact_phone: string | null;
+          is_onboarded: boolean;
           settings: Json;
           created_at: string;
           updated_at: string;
@@ -32,6 +33,7 @@ export type Database = {
           timezone?: string;
           contact_email: string;
           contact_phone?: string | null;
+          is_onboarded?: boolean;
           settings?: Json;
           created_at?: string;
           updated_at?: string;
@@ -414,6 +416,18 @@ export type Database = {
           locale?: string | null;
         };
         Returns: Database["public"]["Tables"]["customers"]["Row"];
+      };
+      create_service: {
+        Args: {
+          business_id: string;
+          region_code: string;
+          name: string;
+          duration_minutes: number;
+          price_cents?: number | null;
+          currency?: string | null;
+          description?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["services"]["Row"];
       };
       create_template: {
         Args: {
