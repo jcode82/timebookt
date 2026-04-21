@@ -5,8 +5,10 @@ import { listAppointmentsForBusiness } from "@/domain/appointments";
 import { listCustomers } from "@/domain/customers";
 
 export interface DashboardData {
+  businessId: string;
   businessName: string;
   slug: string;
+  isOnboarded: boolean;
   metrics: Awaited<ReturnType<typeof getBusinessDashboardMetrics>>;
   appointments: Awaited<ReturnType<typeof listAppointmentsForBusiness>>;
   customers: Awaited<ReturnType<typeof listCustomers>>;
@@ -25,8 +27,10 @@ export async function getDashboardData(slug: string): Promise<DashboardData | nu
   ]);
 
   return {
+    businessId: business.id,
     businessName: business.name,
     slug: business.slug,
+    isOnboarded: business.isOnboarded,
     metrics,
     appointments,
     customers,

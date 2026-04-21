@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getDashboardData } from "@/features/dashboard/api/getDashboardData";
 import { DashboardHeader } from "@/features/dashboard/components/DashboardHeader";
 import { MetricsGrid } from "@/features/dashboard/components/MetricsGrid";
@@ -16,6 +16,10 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
 
   if (!data) {
     notFound();
+  }
+
+  if (!data.isOnboarded) {
+    redirect("/onboarding");
   }
 
   return (
