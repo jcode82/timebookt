@@ -15,6 +15,12 @@ export interface AppointmentRecord {
   updatedAt: string;
 }
 
+export interface ListAppointmentsForBusinessOptions {
+  limit?: number;
+  statuses?: AppointmentStatus[];
+  onlyUpcoming?: boolean;
+}
+
 export interface CreateAppointmentInput {
   businessId: string;
   customerId: string;

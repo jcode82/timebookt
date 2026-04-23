@@ -179,12 +179,45 @@ export async function listBusinessesByRegion(regionCode: string): Promise<Busine
 
 export async function getBusinessDashboardMetrics(businessId: string): Promise<BusinessDashboardMetrics> {
   const supabase = getSupabaseAdmin();
-  const [totalRes, upcomingRes, customersRes, auditLogRes] = await Promise.all([
+  const now = new Date();
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const endOfToday = new Date(startOfToday);
+  endOfToday.setDate(endOfToday.getDate() + 1);
+
+  const startOfWeek = new Date(startOfToday);
+  const dayOfWeek = startOfWeek.getDay();
+  const daysFromMonday = (dayOfWeek + 6) % 7;
+  startOfWeek.setDate(startOfWeek.getDate() - daysFromMonday);
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(endOfWeek.getDate() + 7);
+
+  const activeBookingStatuses = ["scheduled", "completed"] as const;
+
+  const [totalRes, todayRes, weekRes, upcomingRes, customersRes, auditLogRes] = await Promise.all([
     supabase
       .from(TABLES.appointments)
       .select("id", { count: "exact", head: true })
       .eq("business_id", businessId)
       .eq("region_code", REGION),
+    supabase
+      .from(TABLES.appointments)
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .eq("region_code", REGION)
+      .in("status", [...activeBookingStatuses])
+      .gte("start_time", startOfToday.toISOString())
+      .lt("start_time", endOfToday.toISOString()),
+    supabase
+      .from(TABLES.appointments)
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .eq("region_code", REGION)
+      .in("status", [...activeBookingStatuses])
+      .gte("start_time", startOfWeek.toISOString())
+      .lt("start_time", endOfWeek.toISOString()),
     supabase
       .from(TABLES.appointments)
       .select("id", { count: "exact", head: true })
@@ -206,9 +239,11 @@ export async function getBusinessDashboardMetrics(businessId: string): Promise<B
       .limit(DASHBOARD_LIMITS.auditLogs),
   ]);
 
-  if (totalRes.error || upcomingRes.error || customersRes.error || auditLogRes.error) {
+  if (totalRes.error || todayRes.error || weekRes.error || upcomingRes.error || customersRes.error || auditLogRes.error) {
     throw new DomainError("Unable to load dashboard metrics", {
       totalError: totalRes.error,
+      todayError: todayRes.error,
+      weekError: weekRes.error,
       upcomingError: upcomingRes.error,
       customersError: customersRes.error,
       auditError: auditLogRes.error,
@@ -219,6 +254,8 @@ export async function getBusinessDashboardMetrics(businessId: string): Promise<B
 
   return {
     totalAppointments: totalRes.count ?? 0,
+    bookingsToday: todayRes.count ?? 0,
+    bookingsThisWeek: weekRes.count ?? 0,
     upcomingAppointments: upcomingRes.count ?? 0,
     activeCustomers: customersRes.count ?? 0,
     recentAuditLog: auditLogRows.map((log) => ({

@@ -37,6 +37,8 @@ export interface CreateBusinessInput {
 
 export interface BusinessDashboardMetrics {
   totalAppointments: number;
+  bookingsToday: number;
+  bookingsThisWeek: number;
   upcomingAppointments: number;
   activeCustomers: number;
   recentAuditLog: Array<{
