@@ -16,6 +16,7 @@ import type {
   CanonicalAppointmentInput,
   CreateAvailabilityBlockInput,
   CreateAppointmentInput,
+  ListAppointmentsForBusinessOptions,
   ProviderAvailabilityRequest,
   ProviderAvailabilitySlot,
   RescheduleAppointmentInput,
@@ -416,19 +417,33 @@ export async function rescheduleAppointment(
 
 export async function listAppointmentsForBusiness(
   businessId: string,
-  limit = DASHBOARD_LIMITS.appointments,
+  options: number | ListAppointmentsForBusinessOptions = DASHBOARD_LIMITS.appointments,
 ): Promise<AppointmentRecord[]> {
+  const resolvedOptions =
+    typeof options === "number"
+      ? { limit: options }
+      : { limit: DASHBOARD_LIMITS.appointments, ...options };
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
+  let query = supabase
     .from("appointments")
     .select()
     .eq("business_id", businessId)
     .eq("region_code", REGION)
     .order("start_time", { ascending: true })
-    .limit(limit);
+    .limit(resolvedOptions.limit ?? DASHBOARD_LIMITS.appointments);
+
+  if (resolvedOptions.onlyUpcoming) {
+    query = query.gte("start_time", new Date().toISOString());
+  }
+
+  if (resolvedOptions.statuses && resolvedOptions.statuses.length > 0) {
+    query = query.in("status", resolvedOptions.statuses);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
-    throw new DomainError("Unable to load appointments", { error, businessId });
+    throw new DomainError("Unable to load appointments", { error, businessId, options: resolvedOptions });
   }
 
   return (data ?? []).map(mapAppointment);

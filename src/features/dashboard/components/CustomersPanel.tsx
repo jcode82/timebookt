@@ -1,7 +1,7 @@
-import type { DashboardData } from "@/features/dashboard/api/getDashboardData";
+import type { CustomerProfile } from "@/domain/customers";
 
 interface CustomersPanelProps {
-  customers: DashboardData["customers"];
+  customers: CustomerProfile[];
 }
 
 export function CustomersPanel({ customers }: CustomersPanelProps) {
