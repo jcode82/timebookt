@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import type { ProviderAvailabilitySlot } from "@/domain/appointments";
-import type { ServiceRecord } from "@/domain/services";
+import type { ServiceRecord } from "@/domain/services/types";
 import { BOOKING_STEPS } from "@/lib/constants";
 import { createBookingAction, type BookingConfirmation } from "@/features/booking/api/createBookingAction";
 import { getProviderAvailabilityAction } from "@/features/booking/api/getProviderAvailabilityAction";

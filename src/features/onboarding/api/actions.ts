@@ -2,7 +2,7 @@
 
 import { createAvailabilityBlocks } from "@/domain/appointments";
 import { completeBusinessOnboarding, createBusiness } from "@/domain/businesses";
-import { createService } from "@/domain/services";
+import { createService } from "@/domain/services/actions";
 import {
   availabilityBlocksSchema,
   businessProfileSchema,

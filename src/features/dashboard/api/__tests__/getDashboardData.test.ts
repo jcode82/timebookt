@@ -30,7 +30,7 @@ vi.mock("@/domain/appointments", () => ({
   listAppointmentsForBusiness: listAppointmentsForBusinessMock,
 }));
 
-vi.mock("@/domain/services", () => ({
+vi.mock("@/domain/services/actions", () => ({
   listServicesForBusiness: listServicesForBusinessMock,
 }));
 
@@ -127,6 +127,9 @@ describe("getDashboardData", () => {
       limit: 10,
       onlyUpcoming: true,
       statuses: ["scheduled"],
+    });
+    expect(listServicesForBusinessMock).toHaveBeenCalledWith("biz-1", {
+      includeInactive: true,
     });
     expect(getAvailabilityMock).toHaveBeenCalledWith({ businessId: "biz-1" });
   });

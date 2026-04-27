@@ -18,6 +18,9 @@ vi.mock("@/features/dashboard/api/getDashboardData", () => ({
 vi.mock("next/navigation", () => ({
   notFound: notFoundMock,
   redirect: redirectMock,
+  useRouter: () => ({
+    refresh: vi.fn(),
+  }),
 }));
 
 import DashboardPage from "./page";
@@ -89,6 +92,7 @@ describe("DashboardPage", () => {
     expect(html).toContain('href="#availability"');
     expect(html).toContain('href="#appointments"');
     expect(html).toContain("Initial Consultation");
+    expect(html).toContain("Create service");
     expect(html).toContain("Weekly schedule");
   });
 

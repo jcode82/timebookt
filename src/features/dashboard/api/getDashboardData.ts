@@ -3,7 +3,7 @@
 import { unstable_cache } from "next/cache";
 import { getBusinessBySlug, getBusinessDashboardMetrics } from "@/domain/businesses";
 import { getAvailability, listAppointmentsForBusiness } from "@/domain/appointments";
-import { listServicesForBusiness } from "@/domain/services";
+import { listServicesForBusiness } from "@/domain/services/actions";
 import { CACHE_ONE_HOUR } from "@/features/dashboard/utils/constants";
 
 export interface DashboardData {
@@ -32,7 +32,7 @@ const getCachedDashboardData = unstable_cache(
         onlyUpcoming: true,
         statuses: ["scheduled"],
       }),
-      listServicesForBusiness(business.id),
+      listServicesForBusiness(business.id, { includeInactive: true }),
       getAvailability({ businessId: business.id }),
     ]);
 
@@ -49,7 +49,7 @@ const getCachedDashboardData = unstable_cache(
     };
   },
   ["dashboard-data"],
-  { revalidate: CACHE_ONE_HOUR },
+  { revalidate: CACHE_ONE_HOUR, tags: ["dashboard-data"] },
 );
 
 export async function getDashboardData(slug: string): Promise<DashboardData | null> {
