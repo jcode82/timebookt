@@ -16,10 +16,12 @@ import type {
   CanonicalAppointmentInput,
   CreateAvailabilityBlockInput,
   CreateAppointmentInput,
+  DeleteAvailabilityBlockInput,
   ListAppointmentsForBusinessOptions,
   ProviderAvailabilityRequest,
   ProviderAvailabilitySlot,
   RescheduleAppointmentInput,
+  UpdateAvailabilityBlockInput,
 } from "./types";
 import { dedupeAndSortSlots, parseTimestamp } from "./utils";
 
@@ -123,6 +125,41 @@ type SlotAvailabilityWindow = Pick<
   Tables<"availability_blocks">,
   "start_time" | "end_time" | "capacity"
 >;
+
+const availabilityTimePattern = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
+
+function normalizeAvailabilityTime(value: string, fieldName: "startTime" | "endTime") {
+  const match = availabilityTimePattern.exec(value);
+  if (!match) {
+    throw new DomainError(`Availability ${fieldName} must use HH:mm format`, { value, fieldName });
+  }
+
+  return `${match[1]}:${match[2]}:00`;
+}
+
+function validateAvailabilityInput(
+  input: Pick<CreateAvailabilityBlockInput, "dayOfWeek" | "startTime" | "endTime" | "capacity">,
+) {
+  if (input.dayOfWeek < 0 || input.dayOfWeek > 6) {
+    throw new DomainError("Availability day must be between 0 and 6", { input });
+  }
+
+  const startTime = normalizeAvailabilityTime(input.startTime, "startTime");
+  const endTime = normalizeAvailabilityTime(input.endTime, "endTime");
+
+  if (endTime <= startTime) {
+    throw new DomainError("Availability end time must be after start time", { input });
+  }
+
+  const capacity = Math.max(input.capacity ?? 1, 1);
+
+  return {
+    dayOfWeek: input.dayOfWeek,
+    startTime,
+    endTime,
+    capacity,
+  };
+}
 
 export async function createCanonicalAppointment(
   input: CanonicalAppointmentInput,
@@ -672,24 +709,19 @@ export async function createAvailabilityBlocks(
     throw new DomainError("At least one availability block is required");
   }
 
-  for (const input of inputs) {
-    if (input.dayOfWeek < 0 || input.dayOfWeek > 6) {
-      throw new DomainError("Availability day must be between 0 and 6", { input });
-    }
-    if (input.endTime <= input.startTime) {
-      throw new DomainError("Availability end time must be after start time", { input });
-    }
-  }
-
   const supabase = getSupabaseAdmin();
-  const payload: TablesInsert<"availability_blocks">[] = inputs.map((input) => ({
-    business_id: input.businessId,
-    region_code: REGION,
-    day_of_week: input.dayOfWeek,
-    start_time: input.startTime,
-    end_time: input.endTime,
-    capacity: Math.max(input.capacity ?? 1, 1),
-  }));
+  const payload: TablesInsert<"availability_blocks">[] = inputs.map((input) => {
+    const normalized = validateAvailabilityInput(input);
+
+    return {
+      business_id: input.businessId,
+      region_code: REGION,
+      day_of_week: normalized.dayOfWeek,
+      start_time: normalized.startTime,
+      end_time: normalized.endTime,
+      capacity: normalized.capacity,
+    };
+  });
 
   const { data, error } = await supabase
     .from(TABLES.availabilityBlocks)
@@ -701,4 +733,72 @@ export async function createAvailabilityBlocks(
   }
 
   return (data ?? []).map(mapAvailability);
+}
+
+export async function updateAvailabilityBlock(
+  input: UpdateAvailabilityBlockInput,
+): Promise<AvailabilityBlock> {
+  const supabase = getSupabaseAdmin();
+  const { data: existing, error: existingError } = await supabase
+    .from(TABLES.availabilityBlocks)
+    .select()
+    .eq("id", input.availabilityBlockId)
+    .eq("business_id", input.businessId)
+    .eq("region_code", REGION)
+    .maybeSingle();
+
+  if (existingError) {
+    throw new DomainError("Unable to load availability block", { error: existingError, input });
+  }
+
+  if (!existing) {
+    throw new DomainError("Availability block not found", { input, region: REGION });
+  }
+
+  const normalized = validateAvailabilityInput({
+    dayOfWeek: input.dayOfWeek ?? existing.day_of_week,
+    startTime: input.startTime ?? existing.start_time,
+    endTime: input.endTime ?? existing.end_time,
+    capacity: input.capacity ?? existing.capacity,
+  });
+
+  const patch: TablesUpdate<"availability_blocks"> = {
+    day_of_week: normalized.dayOfWeek,
+    start_time: normalized.startTime,
+    end_time: normalized.endTime,
+    capacity: normalized.capacity,
+  };
+
+  const { data, error } = await supabase
+    .from(TABLES.availabilityBlocks)
+    .update(patch)
+    .eq("id", input.availabilityBlockId)
+    .eq("business_id", input.businessId)
+    .eq("region_code", REGION)
+    .select()
+    .maybeSingle();
+
+  if (error || !data) {
+    throw new DomainError("Unable to update availability block", { error, input, patch });
+  }
+
+  return mapAvailability(data);
+}
+
+export async function deleteAvailabilityBlock(input: DeleteAvailabilityBlockInput): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  const { error, count } = await supabase
+    .from(TABLES.availabilityBlocks)
+    .delete({ count: "exact" })
+    .eq("id", input.availabilityBlockId)
+    .eq("business_id", input.businessId)
+    .eq("region_code", REGION);
+
+  if (error) {
+    throw new DomainError("Unable to delete availability block", { error, input });
+  }
+
+  if (count === 0) {
+    throw new DomainError("Availability block not found", { input, region: REGION });
+  }
 }
