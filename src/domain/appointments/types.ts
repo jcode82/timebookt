@@ -107,3 +107,17 @@ export interface CreateAvailabilityBlockInput {
   endTime: string;
   capacity?: number;
 }
+
+export interface UpdateAvailabilityBlockInput {
+  availabilityBlockId: string;
+  businessId: string;
+  dayOfWeek?: number;
+  startTime?: string;
+  endTime?: string;
+  capacity?: number;
+}
+
+export interface DeleteAvailabilityBlockInput {
+  availabilityBlockId: string;
+  businessId: string;
+}

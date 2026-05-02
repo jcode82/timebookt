@@ -94,6 +94,7 @@ describe("DashboardPage", () => {
     expect(html).toContain("Initial Consultation");
     expect(html).toContain("Create service");
     expect(html).toContain("Weekly schedule");
+    expect(html).toContain("Add availability block");
   });
 
   it("redirects businesses that have not completed onboarding", async () => {

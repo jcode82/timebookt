@@ -58,7 +58,11 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
               businessSlug={data.slug}
               services={data.services}
             />
-            <AvailabilityPanel availability={data.availability} />
+            <AvailabilityPanel
+              businessId={data.businessId}
+              businessSlug={data.slug}
+              availability={data.availability}
+            />
           </div>
         </div>
       </main>
