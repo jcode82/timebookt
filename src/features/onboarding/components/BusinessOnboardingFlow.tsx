@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { AvailabilityBlock } from "@/domain/appointments";
-import type { ServiceRecord } from "@/domain/services";
+import type { ServiceRecord } from "@/domain/services/types";
 import {
   completeOnboardingAction,
   createOnboardingAvailabilityAction,

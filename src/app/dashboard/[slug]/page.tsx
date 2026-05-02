@@ -53,7 +53,11 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
             timezone={data.timezone}
           />
           <div className="space-y-8">
-            <ServicesPanel services={data.services} />
+            <ServicesPanel
+              businessId={data.businessId}
+              businessSlug={data.slug}
+              services={data.services}
+            />
             <AvailabilityPanel availability={data.availability} />
           </div>
         </div>

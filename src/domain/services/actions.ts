@@ -3,8 +3,9 @@ import { DomainError } from "@/lib/errors";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
 import { REGION } from "@/lib/env";
 import { rpcCall } from "@/lib/supabase/rpc";
+import type { Json } from "../../../supabase/types";
 import type { Tables } from "../../../supabase/types";
-import type { CreateServiceInput, ServiceRecord } from "./types";
+import type { CreateServiceInput, ListServicesOptions, ServiceRecord, UpdateServiceInput } from "./types";
 
 const mapService = (row: Tables<typeof TABLES.services>): ServiceRecord => ({
   id: row.id,
@@ -36,18 +37,81 @@ export async function createService(input: CreateServiceInput): Promise<ServiceR
   return mapService(data);
 }
 
-export async function listServicesForBusiness(businessId: string): Promise<ServiceRecord[]> {
+export async function updateService(input: UpdateServiceInput): Promise<ServiceRecord> {
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
+  const patch: Record<string, Json> = {};
+
+  if (input.name !== undefined) {
+    patch.name = input.name;
+  }
+  if (input.description !== undefined) {
+    patch.description = input.description;
+  }
+  if (input.durationMinutes !== undefined) {
+    patch.duration_minutes = input.durationMinutes;
+  }
+  if (input.priceCents !== undefined) {
+    patch.price_cents = input.priceCents;
+  }
+  if (input.currency !== undefined) {
+    patch.currency = input.currency;
+  }
+  if (input.isActive !== undefined) {
+    patch.is_active = input.isActive;
+  }
+
+  const { data, error } = await rpcCall<Tables<typeof TABLES.services>>(supabase, "update_service", {
+    service_id: input.serviceId,
+    business_id: input.businessId,
+    region_code: REGION,
+    patch,
+  });
+
+  if (error) {
+    console.error("services.update_failed", { error, input });
+
+    if (error.message.includes("update_service")) {
+      throw new DomainError(
+        "Service updates are unavailable until the latest Supabase service RPC migration is applied",
+        { error, input },
+      );
+    }
+
+    throw new DomainError("Unable to update service", { error, input });
+  }
+
+  if (!data) {
+    console.error("services.update_missing_record", { input, region: REGION });
+    throw new DomainError(
+      "Service update did not return a record. Confirm the service belongs to this business and region.",
+      { input, region: REGION },
+    );
+  }
+
+  return mapService(data);
+}
+
+export async function listServicesForBusiness(
+  businessId: string,
+  options: ListServicesOptions = {},
+): Promise<ServiceRecord[]> {
+  const supabase = getSupabaseAdmin();
+  let query = supabase
     .from(TABLES.services)
     .select()
     .eq("business_id", businessId)
     .eq("region_code", REGION)
-    .eq("is_active", true)
+    .order("is_active", { ascending: false })
     .order("created_at", { ascending: true });
 
+  if (!options.includeInactive) {
+    query = query.eq("is_active", true);
+  }
+
+  const { data, error } = await query;
+
   if (error) {
-    throw new DomainError("Unable to load services", { error, businessId });
+    throw new DomainError("Unable to load services", { error, businessId, options });
   }
 
   return (data ?? []).map(mapService);

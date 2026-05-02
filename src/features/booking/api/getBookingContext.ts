@@ -4,7 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/client";
 import { TABLES } from "@/lib/constants";
 import { REGION } from "@/lib/env";
 import { getBusinessBySlug } from "@/domain/businesses";
-import { listServicesForBusiness } from "@/domain/services";
+import { listServicesForBusiness } from "@/domain/services/actions";
 
 export async function getBookingContext(slug: string) {
   const business = await getBusinessBySlug(slug);

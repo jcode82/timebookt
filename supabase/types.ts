@@ -429,6 +429,15 @@ export type Database = {
         };
         Returns: Database["public"]["Tables"]["services"]["Row"];
       };
+      update_service: {
+        Args: {
+          service_id: string;
+          business_id: string;
+          region_code: string;
+          patch?: Json;
+        };
+        Returns: Database["public"]["Tables"]["services"]["Row"];
+      };
       create_template: {
         Args: {
           business_id: string;
