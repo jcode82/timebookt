@@ -15,10 +15,19 @@ export interface AppointmentRecord {
   updatedAt: string;
 }
 
+export interface AppointmentAdminRecord extends AppointmentRecord {
+  serviceName: string | null;
+  customerName: string | null;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  providerName: string | null;
+}
+
 export interface ListAppointmentsForBusinessOptions {
   limit?: number;
   statuses?: AppointmentStatus[];
   onlyUpcoming?: boolean;
+  date?: string;
 }
 
 export interface CreateAppointmentInput {
