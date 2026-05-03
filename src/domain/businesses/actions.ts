@@ -5,7 +5,13 @@ import { rpcCall } from "@/lib/supabase/rpc";
 import { toSlug } from "@/lib/utils/slug";
 import { REGION } from "@/lib/env";
 import type { Tables, TablesInsert } from "../../../supabase/types";
-import type { BusinessDashboardMetrics, BusinessProfile, BusinessSettings, CreateBusinessInput } from "./types";
+import type {
+  BusinessDashboardMetrics,
+  BusinessProfile,
+  BusinessSettings,
+  CreateBusinessInput,
+  StaffMember,
+} from "./types";
 
 const defaultSettings = (): BusinessSettings => ({
   bookingWindowDays: DEFAULT_BOOKING_WINDOW_DAYS,
@@ -46,6 +52,14 @@ const mapBusiness = (row: Tables<typeof TABLES.businesses>): BusinessProfile => 
   isOnboarded: row.is_onboarded,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+});
+
+const mapStaffMember = (row: Tables<typeof TABLES.staff>): StaffMember => ({
+  id: row.id,
+  businessId: row.business_id,
+  fullName: row.full_name,
+  email: row.email,
+  role: row.role,
 });
 
 export async function createBusiness(payload: CreateBusinessInput): Promise<BusinessProfile> {
@@ -159,6 +173,22 @@ export async function getBusinessBySlug(slug: string): Promise<BusinessProfile |
   }
 
   return data ? mapBusiness(data) : null;
+}
+
+export async function listStaffForBusiness(businessId: string): Promise<StaffMember[]> {
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from(TABLES.staff)
+    .select()
+    .eq("business_id", businessId)
+    .eq("region_code", REGION)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new DomainError("Unable to list staff members", { error, businessId });
+  }
+
+  return (data ?? []).map(mapStaffMember);
 }
 
 export async function listBusinessesByRegion(regionCode: string): Promise<BusinessProfile[]> {

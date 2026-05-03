@@ -6,6 +6,7 @@ interface DashboardSidebarProps {
   upcomingAppointments: number;
   servicesCount: number;
   availabilityCount: number;
+  availabilityExceptionsCount: number;
 }
 
 const sections = [
@@ -25,6 +26,11 @@ const sections = [
     description: "Weekly schedule blocks",
   },
   {
+    href: "#availability-exceptions",
+    label: "Overrides",
+    description: "Date-specific exceptions",
+  },
+  {
     href: "#appointments",
     label: "Appointments",
     description: "Upcoming bookings",
@@ -42,11 +48,13 @@ export function DashboardSidebar({
   upcomingAppointments,
   servicesCount,
   availabilityCount,
+  availabilityExceptionsCount,
 }: DashboardSidebarProps) {
   const countsBySection: Record<string, number | null> = {
     Overview: null,
     Services: servicesCount,
     Availability: availabilityCount,
+    Overrides: availabilityExceptionsCount,
     Appointments: upcomingAppointments,
     Customers: customersCount,
   };

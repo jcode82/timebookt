@@ -1,8 +1,12 @@
 "use server";
 
 import { unstable_cache } from "next/cache";
-import { getBusinessBySlug, getBusinessDashboardMetrics } from "@/domain/businesses";
-import { getAvailability, listAppointmentsForBusiness } from "@/domain/appointments";
+import { getBusinessBySlug, getBusinessDashboardMetrics, listStaffForBusiness } from "@/domain/businesses";
+import {
+  getAvailability,
+  getAvailabilityExceptions,
+  listAppointmentsForBusiness,
+} from "@/domain/appointments";
 import { listBookedCustomersForBusiness } from "@/domain/customers";
 import { listServicesForBusiness } from "@/domain/services/actions";
 import { CACHE_ONE_HOUR } from "@/features/dashboard/utils/constants";
@@ -18,6 +22,8 @@ export interface DashboardData {
   customers: Awaited<ReturnType<typeof listBookedCustomersForBusiness>>;
   services: Awaited<ReturnType<typeof listServicesForBusiness>>;
   availability: Awaited<ReturnType<typeof getAvailability>>;
+  availabilityExceptions: Awaited<ReturnType<typeof getAvailabilityExceptions>>;
+  staffMembers: Awaited<ReturnType<typeof listStaffForBusiness>>;
 }
 
 const getCachedDashboardData = unstable_cache(
@@ -27,7 +33,8 @@ const getCachedDashboardData = unstable_cache(
       return null;
     }
 
-    const [metrics, appointments, customers, services, availability] = await Promise.all([
+    const [metrics, appointments, customers, services, availability, availabilityExceptions, staffMembers] =
+      await Promise.all([
       getBusinessDashboardMetrics(business.id),
       listAppointmentsForBusiness(business.id, {
         limit: 10,
@@ -40,6 +47,8 @@ const getCachedDashboardData = unstable_cache(
       }),
       listServicesForBusiness(business.id, { includeInactive: true }),
       getAvailability({ businessId: business.id }),
+      getAvailabilityExceptions({ businessId: business.id }),
+      listStaffForBusiness(business.id),
     ]);
 
     return {
@@ -53,6 +62,8 @@ const getCachedDashboardData = unstable_cache(
       customers,
       services,
       availability,
+      availabilityExceptions,
+      staffMembers,
     };
   },
   ["dashboard-data"],

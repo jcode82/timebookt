@@ -8,6 +8,7 @@ import { AppointmentsPanel } from "@/features/dashboard/components/AppointmentsP
 import { CustomersPanel } from "@/features/dashboard/components/CustomersPanel";
 import { ServicesPanel } from "@/features/dashboard/components/ServicesPanel";
 import { AvailabilityPanel } from "@/features/dashboard/components/AvailabilityPanel";
+import { AvailabilityExceptionsPanel } from "@/features/dashboard/components/AvailabilityExceptionsPanel";
 
 interface DashboardPageProps {
   params: Promise<{ slug: string }>;
@@ -35,6 +36,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
           upcomingAppointments={data.metrics.upcomingAppointments}
           servicesCount={data.services.length}
           availabilityCount={data.availability.length}
+          availabilityExceptionsCount={data.availabilityExceptions.length}
         />
       </aside>
       <main className="space-y-8">
@@ -61,6 +63,12 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
               businessId={data.businessId}
               businessSlug={data.slug}
               availability={data.availability}
+            />
+            <AvailabilityExceptionsPanel
+              businessId={data.businessId}
+              businessSlug={data.slug}
+              staffMembers={data.staffMembers}
+              availabilityExceptions={data.availabilityExceptions}
             />
           </div>
         </div>
