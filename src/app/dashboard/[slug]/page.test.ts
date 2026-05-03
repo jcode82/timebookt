@@ -91,7 +91,7 @@ describe("DashboardPage", () => {
     expect(html).toContain('href="#services"');
     expect(html).toContain('href="#availability"');
     expect(html).toContain('href="#appointments"');
-    expect(html).toContain("Initial Consultation");
+    expect(html).toContain("Appointment management");
     expect(html).toContain("Create service");
     expect(html).toContain("Weekly schedule");
     expect(html).toContain("Add availability block");

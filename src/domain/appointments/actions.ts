@@ -8,6 +8,7 @@ import { REGION } from "@/lib/env";
 import type { Tables, TablesInsert, TablesUpdate } from "../../../supabase/types";
 import { logAppointmentAuditEvent } from "./audit";
 import type {
+  AppointmentAdminRecord,
   AppointmentRecord,
   AvailabilityBlock,
   AvailabilityRequest,
@@ -456,25 +457,31 @@ export async function listAppointmentsForBusiness(
   businessId: string,
   options: number | ListAppointmentsForBusinessOptions = DASHBOARD_LIMITS.appointments,
 ): Promise<AppointmentRecord[]> {
-  const resolvedOptions =
-    typeof options === "number"
-      ? { limit: options }
-      : { limit: DASHBOARD_LIMITS.appointments, ...options };
+  const resolvedOptions = typeof options === "number" ? { limit: options } : options;
   const supabase = getSupabaseAdmin();
   let query = supabase
     .from("appointments")
     .select()
     .eq("business_id", businessId)
     .eq("region_code", REGION)
-    .order("start_time", { ascending: true })
-    .limit(resolvedOptions.limit ?? DASHBOARD_LIMITS.appointments);
+    .order("start_time", { ascending: true });
 
   if (resolvedOptions.onlyUpcoming) {
     query = query.gte("start_time", new Date().toISOString());
   }
 
+  if (resolvedOptions.date) {
+    const dayStart = new Date(`${resolvedOptions.date}T00:00:00.000Z`);
+    const dayEnd = new Date(`${resolvedOptions.date}T23:59:59.999Z`);
+    query = query.gte("start_time", dayStart.toISOString()).lte("start_time", dayEnd.toISOString());
+  }
+
   if (resolvedOptions.statuses && resolvedOptions.statuses.length > 0) {
     query = query.in("status", resolvedOptions.statuses);
+  }
+
+  if (typeof resolvedOptions.limit === "number") {
+    query = query.limit(resolvedOptions.limit);
   }
 
   const { data, error } = await query;
@@ -484,6 +491,86 @@ export async function listAppointmentsForBusiness(
   }
 
   return (data ?? []).map(mapAppointment);
+}
+
+export async function listAppointmentAdminRecordsForBusiness(
+  businessId: string,
+  options: ListAppointmentsForBusinessOptions = {},
+): Promise<AppointmentAdminRecord[]> {
+  const appointments = await listAppointmentsForBusiness(businessId, options);
+
+  if (appointments.length === 0) {
+    return [];
+  }
+
+  const supabase = getSupabaseAdmin();
+  const serviceIds = [...new Set(appointments.map((appointment) => appointment.serviceId))];
+  const customerIds = [...new Set(appointments.map((appointment) => appointment.customerId))];
+  const providerIds = [
+    ...new Set(
+      appointments
+        .map((appointment) => appointment.staffId)
+        .filter((staffId): staffId is string => Boolean(staffId)),
+    ),
+  ];
+
+  const [servicesRes, customersRes, providersRes] = await Promise.all([
+    supabase.from(TABLES.services).select("id, name").in("id", serviceIds),
+    supabase.from(TABLES.customers).select("id, full_name, email, phone").in("id", customerIds),
+    providerIds.length > 0
+      ? supabase.from(TABLES.staff).select("id, full_name").in("id", providerIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (servicesRes.error) {
+    throw new DomainError("Unable to load appointment services", { error: servicesRes.error, businessId });
+  }
+
+  if (customersRes.error) {
+    throw new DomainError("Unable to load appointment customers", {
+      error: customersRes.error,
+      businessId,
+    });
+  }
+
+  if (providersRes.error) {
+    throw new DomainError("Unable to load appointment providers", {
+      error: providersRes.error,
+      businessId,
+    });
+  }
+
+  const servicesById = new Map(
+    (servicesRes.data ?? []).map((service) => [service.id, service.name] as const),
+  );
+  const customersById = new Map(
+    (customersRes.data ?? []).map(
+      (customer) =>
+        [
+          customer.id,
+          {
+            name: customer.full_name,
+            email: customer.email,
+            phone: customer.phone,
+          },
+        ] as const,
+    ),
+  );
+  const providersById = new Map(
+    (providersRes.data ?? []).map((provider) => [provider.id, provider.full_name] as const),
+  );
+
+  return appointments.map((appointment) => {
+    const customer = customersById.get(appointment.customerId);
+    return {
+      ...appointment,
+      serviceName: servicesById.get(appointment.serviceId) ?? null,
+      customerName: customer?.name ?? null,
+      customerEmail: customer?.email ?? null,
+      customerPhone: customer?.phone ?? null,
+      providerName: appointment.staffId ? (providersById.get(appointment.staffId) ?? null) : null,
+    };
+  });
 }
 
 export async function getBookingStatus(

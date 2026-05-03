@@ -30,7 +30,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
         <DashboardHeader businessName={data.businessName} slug={data.slug} timezone={data.timezone} />
         <DashboardSidebar
           businessSlug={data.slug}
-          upcomingAppointments={data.appointments.length}
+          upcomingAppointments={data.metrics.upcomingAppointments}
           servicesCount={data.services.length}
           availabilityCount={data.availability.length}
         />
@@ -47,11 +47,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
           </div>
         </section>
         <div className="grid gap-8 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-          <AppointmentsPanel
-            appointments={data.appointments}
-            services={data.services}
-            timezone={data.timezone}
-          />
+          <AppointmentsPanel businessId={data.businessId} timezone={data.timezone} />
           <div className="space-y-8">
             <ServicesPanel
               businessId={data.businessId}
