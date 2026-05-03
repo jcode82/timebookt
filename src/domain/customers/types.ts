@@ -9,6 +9,10 @@ export interface CustomerProfile {
   updatedAt: string;
 }
 
+export interface BookedCustomerSummary extends CustomerProfile {
+  bookingCount: number;
+}
+
 export interface CreateCustomerInput {
   businessId: string;
   name: string;

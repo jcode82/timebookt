@@ -3,6 +3,7 @@
 import { unstable_cache } from "next/cache";
 import { getBusinessBySlug, getBusinessDashboardMetrics } from "@/domain/businesses";
 import { getAvailability, listAppointmentsForBusiness } from "@/domain/appointments";
+import { listBookedCustomersForBusiness } from "@/domain/customers";
 import { listServicesForBusiness } from "@/domain/services/actions";
 import { CACHE_ONE_HOUR } from "@/features/dashboard/utils/constants";
 
@@ -14,6 +15,7 @@ export interface DashboardData {
   isOnboarded: boolean;
   metrics: Awaited<ReturnType<typeof getBusinessDashboardMetrics>>;
   appointments: Awaited<ReturnType<typeof listAppointmentsForBusiness>>;
+  customers: Awaited<ReturnType<typeof listBookedCustomersForBusiness>>;
   services: Awaited<ReturnType<typeof listServicesForBusiness>>;
   availability: Awaited<ReturnType<typeof getAvailability>>;
 }
@@ -25,12 +27,16 @@ const getCachedDashboardData = unstable_cache(
       return null;
     }
 
-    const [metrics, appointments, services, availability] = await Promise.all([
+    const [metrics, appointments, customers, services, availability] = await Promise.all([
       getBusinessDashboardMetrics(business.id),
       listAppointmentsForBusiness(business.id, {
         limit: 10,
         onlyUpcoming: true,
         statuses: ["scheduled"],
+      }),
+      listBookedCustomersForBusiness({
+        businessId: business.id,
+        limit: 25,
       }),
       listServicesForBusiness(business.id, { includeInactive: true }),
       getAvailability({ businessId: business.id }),
@@ -44,6 +50,7 @@ const getCachedDashboardData = unstable_cache(
       isOnboarded: business.isOnboarded,
       metrics,
       appointments,
+      customers,
       services,
       availability,
     };

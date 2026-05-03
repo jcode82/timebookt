@@ -5,6 +5,7 @@ const {
   getBusinessBySlugMock,
   getBusinessDashboardMetricsMock,
   listAppointmentsForBusinessMock,
+  listBookedCustomersForBusinessMock,
   listServicesForBusinessMock,
   getAvailabilityMock,
 } = vi.hoisted(() => ({
@@ -12,6 +13,7 @@ const {
   getBusinessBySlugMock: vi.fn(),
   getBusinessDashboardMetricsMock: vi.fn(),
   listAppointmentsForBusinessMock: vi.fn(),
+  listBookedCustomersForBusinessMock: vi.fn(),
   listServicesForBusinessMock: vi.fn(),
   getAvailabilityMock: vi.fn(),
 }));
@@ -30,6 +32,10 @@ vi.mock("@/domain/appointments", () => ({
   listAppointmentsForBusiness: listAppointmentsForBusinessMock,
 }));
 
+vi.mock("@/domain/customers", () => ({
+  listBookedCustomersForBusiness: listBookedCustomersForBusinessMock,
+}));
+
 vi.mock("@/domain/services/actions", () => ({
   listServicesForBusiness: listServicesForBusinessMock,
 }));
@@ -41,6 +47,7 @@ describe("getDashboardData", () => {
     getBusinessBySlugMock.mockReset();
     getBusinessDashboardMetricsMock.mockReset();
     listAppointmentsForBusinessMock.mockReset();
+    listBookedCustomersForBusinessMock.mockReset();
     listServicesForBusinessMock.mockReset();
     getAvailabilityMock.mockReset();
   });
@@ -92,6 +99,19 @@ describe("getDashboardData", () => {
         updatedAt: "2026-04-20T10:00:00.000Z",
       },
     ]);
+    listBookedCustomersForBusinessMock.mockResolvedValueOnce([
+      {
+        id: "cust-1",
+        businessId: "biz-1",
+        fullName: "Jamie Fox",
+        email: "jamie@example.com",
+        phone: "555-0110",
+        locale: null,
+        createdAt: "2026-04-20T10:00:00.000Z",
+        updatedAt: "2026-04-20T10:00:00.000Z",
+        bookingCount: 3,
+      },
+    ]);
     listServicesForBusinessMock.mockResolvedValueOnce([
       {
         id: "svc-1",
@@ -121,12 +141,17 @@ describe("getDashboardData", () => {
     expect(result?.isOnboarded).toBe(false);
     expect(result?.businessId).toBe("biz-1");
     expect(result?.timezone).toBe("America/New_York");
+    expect(result?.customers).toHaveLength(1);
     expect(result?.services).toHaveLength(1);
     expect(result?.availability).toHaveLength(1);
     expect(listAppointmentsForBusinessMock).toHaveBeenCalledWith("biz-1", {
       limit: 10,
       onlyUpcoming: true,
       statuses: ["scheduled"],
+    });
+    expect(listBookedCustomersForBusinessMock).toHaveBeenCalledWith({
+      businessId: "biz-1",
+      limit: 25,
     });
     expect(listServicesForBusinessMock).toHaveBeenCalledWith("biz-1", {
       includeInactive: true,
@@ -142,5 +167,6 @@ describe("getDashboardData", () => {
     expect(result).toBeNull();
     expect(getBusinessDashboardMetricsMock).not.toHaveBeenCalled();
     expect(listAppointmentsForBusinessMock).not.toHaveBeenCalled();
+    expect(listBookedCustomersForBusinessMock).not.toHaveBeenCalled();
   });
 });
