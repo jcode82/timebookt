@@ -8,6 +8,8 @@ const {
   listBookedCustomersForBusinessMock,
   listServicesForBusinessMock,
   getAvailabilityMock,
+  getAvailabilityExceptionsMock,
+  listStaffForBusinessMock,
 } = vi.hoisted(() => ({
   unstableCacheMock: vi.fn((callback: (...args: unknown[]) => unknown) => callback),
   getBusinessBySlugMock: vi.fn(),
@@ -16,6 +18,8 @@ const {
   listBookedCustomersForBusinessMock: vi.fn(),
   listServicesForBusinessMock: vi.fn(),
   getAvailabilityMock: vi.fn(),
+  getAvailabilityExceptionsMock: vi.fn(),
+  listStaffForBusinessMock: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({
@@ -25,10 +29,12 @@ vi.mock("next/cache", () => ({
 vi.mock("@/domain/businesses", () => ({
   getBusinessBySlug: getBusinessBySlugMock,
   getBusinessDashboardMetrics: getBusinessDashboardMetricsMock,
+  listStaffForBusiness: listStaffForBusinessMock,
 }));
 
 vi.mock("@/domain/appointments", () => ({
   getAvailability: getAvailabilityMock,
+  getAvailabilityExceptions: getAvailabilityExceptionsMock,
   listAppointmentsForBusiness: listAppointmentsForBusinessMock,
 }));
 
@@ -50,6 +56,8 @@ describe("getDashboardData", () => {
     listBookedCustomersForBusinessMock.mockReset();
     listServicesForBusinessMock.mockReset();
     getAvailabilityMock.mockReset();
+    getAvailabilityExceptionsMock.mockReset();
+    listStaffForBusinessMock.mockReset();
   });
 
   it("returns dashboard data from the business slug", async () => {
@@ -135,6 +143,29 @@ describe("getDashboardData", () => {
         capacity: 1,
       },
     ]);
+    getAvailabilityExceptionsMock.mockResolvedValueOnce([
+      {
+        id: "exception-1",
+        businessId: "biz-1",
+        staffId: "staff-1",
+        exceptionDate: "2026-04-24",
+        isClosed: true,
+        startTime: null,
+        endTime: null,
+        capacity: 1,
+        createdAt: "2026-04-20T10:00:00.000Z",
+        updatedAt: "2026-04-20T10:00:00.000Z",
+      },
+    ]);
+    listStaffForBusinessMock.mockResolvedValueOnce([
+      {
+        id: "staff-1",
+        businessId: "biz-1",
+        fullName: "Taylor Stylist",
+        email: "taylor@example.com",
+        role: "staff",
+      },
+    ]);
 
     const result = await getDashboardData("studio-north");
 
@@ -144,6 +175,8 @@ describe("getDashboardData", () => {
     expect(result?.customers).toHaveLength(1);
     expect(result?.services).toHaveLength(1);
     expect(result?.availability).toHaveLength(1);
+    expect(result?.availabilityExceptions).toHaveLength(1);
+    expect(result?.staffMembers).toHaveLength(1);
     expect(listAppointmentsForBusinessMock).toHaveBeenCalledWith("biz-1", {
       limit: 10,
       onlyUpcoming: true,
@@ -157,6 +190,8 @@ describe("getDashboardData", () => {
       includeInactive: true,
     });
     expect(getAvailabilityMock).toHaveBeenCalledWith({ businessId: "biz-1" });
+    expect(getAvailabilityExceptionsMock).toHaveBeenCalledWith({ businessId: "biz-1" });
+    expect(listStaffForBusinessMock).toHaveBeenCalledWith("biz-1");
   });
 
   it("returns null when the business does not exist", async () => {

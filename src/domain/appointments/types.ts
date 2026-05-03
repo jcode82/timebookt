@@ -103,10 +103,28 @@ export interface AvailabilityBlock {
   capacity: number;
 }
 
+export interface AvailabilityException {
+  id: string;
+  businessId: string;
+  staffId: string;
+  exceptionDate: string;
+  isClosed: boolean;
+  startTime?: string | null;
+  endTime?: string | null;
+  capacity: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AvailabilityRequest {
   businessId: string;
   providerId?: string;
   dayOfWeek?: number;
+}
+
+export interface AvailabilityExceptionRequest {
+  businessId: string;
+  providerId?: string;
 }
 
 export interface CreateAvailabilityBlockInput {
@@ -128,5 +146,31 @@ export interface UpdateAvailabilityBlockInput {
 
 export interface DeleteAvailabilityBlockInput {
   availabilityBlockId: string;
+  businessId: string;
+}
+
+export interface CreateAvailabilityExceptionInput {
+  businessId: string;
+  staffId: string;
+  exceptionDate: string;
+  isClosed: boolean;
+  startTime?: string | null;
+  endTime?: string | null;
+  capacity?: number;
+}
+
+export interface UpdateAvailabilityExceptionInput {
+  availabilityExceptionId: string;
+  businessId: string;
+  staffId?: string;
+  exceptionDate?: string;
+  isClosed?: boolean;
+  startTime?: string | null;
+  endTime?: string | null;
+  capacity?: number;
+}
+
+export interface DeleteAvailabilityExceptionInput {
+  availabilityExceptionId: string;
   businessId: string;
 }

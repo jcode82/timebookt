@@ -11,18 +11,23 @@ import type {
   AppointmentAdminRecord,
   AppointmentRecord,
   AvailabilityBlock,
+  AvailabilityException,
+  AvailabilityExceptionRequest,
   AvailabilityRequest,
   BookingStatusDetails,
   CancelAppointmentInput,
   CanonicalAppointmentInput,
   CreateAvailabilityBlockInput,
+  CreateAvailabilityExceptionInput,
   CreateAppointmentInput,
   DeleteAvailabilityBlockInput,
+  DeleteAvailabilityExceptionInput,
   ListAppointmentsForBusinessOptions,
   ProviderAvailabilityRequest,
   ProviderAvailabilitySlot,
   RescheduleAppointmentInput,
   UpdateAvailabilityBlockInput,
+  UpdateAvailabilityExceptionInput,
 } from "./types";
 import { dedupeAndSortSlots, parseTimestamp } from "./utils";
 
@@ -122,12 +127,26 @@ const mapAvailability = (row: Tables<"availability_blocks">): AvailabilityBlock 
   capacity: row.capacity,
 });
 
+const mapAvailabilityException = (row: Tables<"availability_exceptions">): AvailabilityException => ({
+  id: row.id,
+  businessId: row.business_id,
+  staffId: row.staff_id,
+  exceptionDate: row.exception_date,
+  isClosed: row.is_closed,
+  startTime: row.start_time,
+  endTime: row.end_time,
+  capacity: row.capacity,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
 type SlotAvailabilityWindow = Pick<
   Tables<"availability_blocks">,
   "start_time" | "end_time" | "capacity"
 >;
 
 const availabilityTimePattern = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
+const availabilityExceptionDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 
 function normalizeAvailabilityTime(value: string, fieldName: "startTime" | "endTime") {
   const match = availabilityTimePattern.exec(value);
@@ -156,6 +175,48 @@ function validateAvailabilityInput(
 
   return {
     dayOfWeek: input.dayOfWeek,
+    startTime,
+    endTime,
+    capacity,
+  };
+}
+
+function validateAvailabilityExceptionInput(
+  input: Pick<
+    CreateAvailabilityExceptionInput,
+    "exceptionDate" | "isClosed" | "startTime" | "endTime" | "capacity"
+  >,
+) {
+  if (!availabilityExceptionDatePattern.test(input.exceptionDate)) {
+    throw new DomainError("Availability exception date must use YYYY-MM-DD", { input });
+  }
+
+  const capacity = Math.max(input.capacity ?? 1, 1);
+
+  if (input.isClosed) {
+    return {
+      exceptionDate: input.exceptionDate,
+      isClosed: true,
+      startTime: null,
+      endTime: null,
+      capacity,
+    };
+  }
+
+  if (!input.startTime || !input.endTime) {
+    throw new DomainError("Open availability exceptions require start and end times", { input });
+  }
+
+  const startTime = normalizeAvailabilityTime(input.startTime, "startTime");
+  const endTime = normalizeAvailabilityTime(input.endTime, "endTime");
+
+  if (endTime <= startTime) {
+    throw new DomainError("Availability exception end time must be after start time", { input });
+  }
+
+  return {
+    exceptionDate: input.exceptionDate,
+    isClosed: false,
     startTime,
     endTime,
     capacity,
@@ -789,6 +850,31 @@ export async function getAvailability(
   return (data ?? []).map(mapAvailability);
 }
 
+export async function getAvailabilityExceptions(
+  request: AvailabilityExceptionRequest,
+): Promise<AvailabilityException[]> {
+  const supabase = getSupabaseAdmin();
+  let query = supabase
+    .from(TABLES.availabilityExceptions)
+    .select()
+    .eq("business_id", request.businessId)
+    .eq("region_code", REGION)
+    .order("exception_date", { ascending: true })
+    .order("created_at", { ascending: false });
+
+  if (request.providerId) {
+    query = query.eq("staff_id", request.providerId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new DomainError("Unable to load availability exceptions", { error, request });
+  }
+
+  return (data ?? []).map(mapAvailabilityException);
+}
+
 export async function createAvailabilityBlocks(
   inputs: CreateAvailabilityBlockInput[],
 ): Promise<AvailabilityBlock[]> {
@@ -887,5 +973,112 @@ export async function deleteAvailabilityBlock(input: DeleteAvailabilityBlockInpu
 
   if (count === 0) {
     throw new DomainError("Availability block not found", { input, region: REGION });
+  }
+}
+
+export async function createAvailabilityException(
+  input: CreateAvailabilityExceptionInput,
+): Promise<AvailabilityException> {
+  const supabase = getSupabaseAdmin();
+  const normalized = validateAvailabilityExceptionInput(input);
+
+  const payload: TablesInsert<"availability_exceptions"> = {
+    business_id: input.businessId,
+    staff_id: input.staffId,
+    region_code: REGION,
+    exception_date: normalized.exceptionDate,
+    is_closed: normalized.isClosed,
+    start_time: normalized.startTime,
+    end_time: normalized.endTime,
+    capacity: normalized.capacity,
+  };
+
+  const { data, error } = await supabase
+    .from(TABLES.availabilityExceptions)
+    .insert(payload)
+    .select()
+    .maybeSingle();
+
+  if (error || !data) {
+    throw new DomainError("Unable to create availability exception", { error, input, payload });
+  }
+
+  return mapAvailabilityException(data);
+}
+
+export async function updateAvailabilityException(
+  input: UpdateAvailabilityExceptionInput,
+): Promise<AvailabilityException> {
+  const supabase = getSupabaseAdmin();
+  const { data: existing, error: existingError } = await supabase
+    .from(TABLES.availabilityExceptions)
+    .select()
+    .eq("id", input.availabilityExceptionId)
+    .eq("business_id", input.businessId)
+    .eq("region_code", REGION)
+    .maybeSingle();
+
+  if (existingError) {
+    throw new DomainError("Unable to load availability exception", {
+      error: existingError,
+      input,
+    });
+  }
+
+  if (!existing) {
+    throw new DomainError("Availability exception not found", { input, region: REGION });
+  }
+
+  const normalized = validateAvailabilityExceptionInput({
+    exceptionDate: input.exceptionDate ?? existing.exception_date,
+    isClosed: input.isClosed ?? existing.is_closed,
+    startTime: input.startTime ?? existing.start_time,
+    endTime: input.endTime ?? existing.end_time,
+    capacity: input.capacity ?? existing.capacity,
+  });
+
+  const patch: TablesUpdate<"availability_exceptions"> = {
+    staff_id: input.staffId ?? existing.staff_id,
+    exception_date: normalized.exceptionDate,
+    is_closed: normalized.isClosed,
+    start_time: normalized.startTime,
+    end_time: normalized.endTime,
+    capacity: normalized.capacity,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from(TABLES.availabilityExceptions)
+    .update(patch)
+    .eq("id", input.availabilityExceptionId)
+    .eq("business_id", input.businessId)
+    .eq("region_code", REGION)
+    .select()
+    .maybeSingle();
+
+  if (error || !data) {
+    throw new DomainError("Unable to update availability exception", { error, input, patch });
+  }
+
+  return mapAvailabilityException(data);
+}
+
+export async function deleteAvailabilityException(
+  input: DeleteAvailabilityExceptionInput,
+): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  const { error, count } = await supabase
+    .from(TABLES.availabilityExceptions)
+    .delete({ count: "exact" })
+    .eq("id", input.availabilityExceptionId)
+    .eq("business_id", input.businessId)
+    .eq("region_code", REGION);
+
+  if (error) {
+    throw new DomainError("Unable to delete availability exception", { error, input });
+  }
+
+  if (count === 0) {
+    throw new DomainError("Availability exception not found", { input, region: REGION });
   }
 }

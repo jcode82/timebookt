@@ -1,19 +1,28 @@
 "use server";
 
 import { revalidatePath, revalidateTag } from "next/cache";
-import type { AvailabilityBlock } from "@/domain/appointments";
+import type { AvailabilityBlock, AvailabilityException } from "@/domain/appointments";
 import {
   createAvailabilityBlocks,
+  createAvailabilityException,
+  deleteAvailabilityException,
   deleteAvailabilityBlock,
+  updateAvailabilityException,
   updateAvailabilityBlock,
 } from "@/domain/appointments/actions";
 import {
   createDashboardAvailabilitySchema,
+  createDashboardAvailabilityExceptionSchema,
   deleteDashboardAvailabilitySchema,
+  deleteDashboardAvailabilityExceptionSchema,
   updateDashboardAvailabilitySchema,
+  updateDashboardAvailabilityExceptionSchema,
   type CreateDashboardAvailabilityInput,
+  type CreateDashboardAvailabilityExceptionInput,
   type DeleteDashboardAvailabilityInput,
+  type DeleteDashboardAvailabilityExceptionInput,
   type UpdateDashboardAvailabilityInput,
+  type UpdateDashboardAvailabilityExceptionInput,
 } from "@/features/dashboard/utils/availabilityManagementSchema";
 
 function refreshDashboard(slug: string) {
@@ -34,6 +43,10 @@ export type AvailabilityMutationResult =
   | { ok: false; message: string };
 
 export type AvailabilityDeleteResult = { ok: true } | { ok: false; message: string };
+export type AvailabilityExceptionMutationResult =
+  | { ok: true; availabilityException: AvailabilityException }
+  | { ok: false; message: string };
+export type AvailabilityExceptionDeleteResult = { ok: true } | { ok: false; message: string };
 
 export async function createDashboardAvailabilityAction(
   input: CreateDashboardAvailabilityInput,
@@ -75,6 +88,50 @@ export async function deleteDashboardAvailabilityAction(
     const payload = deleteDashboardAvailabilitySchema.parse(input);
     await deleteAvailabilityBlock({
       availabilityBlockId: payload.availabilityBlockId,
+      businessId: payload.businessId,
+    });
+    refreshDashboard(payload.businessSlug);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: toActionErrorMessage(error) };
+  }
+}
+
+export async function createDashboardAvailabilityExceptionAction(
+  input: CreateDashboardAvailabilityExceptionInput,
+): Promise<AvailabilityExceptionMutationResult> {
+  try {
+    const payload = createDashboardAvailabilityExceptionSchema.parse(input);
+    const { businessSlug, ...availabilityExceptionInput } = payload;
+    const availabilityException = await createAvailabilityException(availabilityExceptionInput);
+    refreshDashboard(businessSlug);
+    return { ok: true, availabilityException };
+  } catch (error) {
+    return { ok: false, message: toActionErrorMessage(error) };
+  }
+}
+
+export async function updateDashboardAvailabilityExceptionAction(
+  input: UpdateDashboardAvailabilityExceptionInput,
+): Promise<AvailabilityExceptionMutationResult> {
+  try {
+    const payload = updateDashboardAvailabilityExceptionSchema.parse(input);
+    const { businessSlug, ...availabilityExceptionInput } = payload;
+    const availabilityException = await updateAvailabilityException(availabilityExceptionInput);
+    refreshDashboard(businessSlug);
+    return { ok: true, availabilityException };
+  } catch (error) {
+    return { ok: false, message: toActionErrorMessage(error) };
+  }
+}
+
+export async function deleteDashboardAvailabilityExceptionAction(
+  input: DeleteDashboardAvailabilityExceptionInput,
+): Promise<AvailabilityExceptionDeleteResult> {
+  try {
+    const payload = deleteDashboardAvailabilityExceptionSchema.parse(input);
+    await deleteAvailabilityException({
+      availabilityExceptionId: payload.availabilityExceptionId,
       businessId: payload.businessId,
     });
     refreshDashboard(payload.businessSlug);

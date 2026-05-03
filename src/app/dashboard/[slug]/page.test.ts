@@ -93,6 +93,29 @@ describe("DashboardPage", () => {
           capacity: 1,
         },
       ],
+      availabilityExceptions: [
+        {
+          id: "exception-1",
+          businessId: "biz-1",
+          staffId: "staff-1",
+          exceptionDate: "2026-04-24",
+          isClosed: true,
+          startTime: null,
+          endTime: null,
+          capacity: 1,
+          createdAt: "2026-04-20T10:00:00.000Z",
+          updatedAt: "2026-04-20T10:00:00.000Z",
+        },
+      ],
+      staffMembers: [
+        {
+          id: "staff-1",
+          businessId: "biz-1",
+          fullName: "Taylor Stylist",
+          email: "taylor@example.com",
+          role: "staff",
+        },
+      ],
     });
 
     const page = await DashboardPage({
@@ -103,6 +126,7 @@ describe("DashboardPage", () => {
     expect(html).toContain("Operations at a glance");
     expect(html).toContain('href="#services"');
     expect(html).toContain('href="#availability"');
+    expect(html).toContain('href="#availability-exceptions"');
     expect(html).toContain('href="#appointments"');
     expect(html).toContain('href="#customers"');
     expect(html).toContain("Appointment management");
@@ -112,6 +136,8 @@ describe("DashboardPage", () => {
     expect(html).toContain("Create service");
     expect(html).toContain("Weekly schedule");
     expect(html).toContain("Add availability block");
+    expect(html).toContain("Availability exceptions");
+    expect(html).toContain("Add date override");
   });
 
   it("redirects businesses that have not completed onboarding", async () => {
@@ -133,6 +159,8 @@ describe("DashboardPage", () => {
       customers: [],
       services: [],
       availability: [],
+      availabilityExceptions: [],
+      staffMembers: [],
     });
 
     await expect(
