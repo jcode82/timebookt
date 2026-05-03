@@ -4,7 +4,12 @@ import { getSupabaseAdmin } from "@/lib/supabase/client";
 import { rpcCall } from "@/lib/supabase/rpc";
 import { REGION } from "@/lib/env";
 import type { Tables, TablesInsert } from "../../../supabase/types";
-import type { CreateCustomerInput, CustomerFilter, CustomerProfile } from "./types";
+import type {
+  BookedCustomerSummary,
+  CreateCustomerInput,
+  CustomerFilter,
+  CustomerProfile,
+} from "./types";
 
 const mapCustomer = (row: Tables<typeof TABLES.customers>): CustomerProfile => ({
   id: row.id,
@@ -91,4 +96,86 @@ export async function listCustomers(filter: CustomerFilter): Promise<CustomerPro
   }
 
   return (data ?? []).map(mapCustomer);
+}
+
+export async function listBookedCustomersForBusiness(
+  filter: CustomerFilter,
+): Promise<BookedCustomerSummary[]> {
+  const supabase = getSupabaseAdmin();
+  const appointmentsQuery = supabase
+    .from(TABLES.appointments)
+    .select("customer_id, start_time")
+    .eq("business_id", filter.businessId)
+    .eq("region_code", REGION)
+    .order("start_time", { ascending: false });
+
+  const { data: appointmentRows, error: appointmentsError } = await appointmentsQuery;
+
+  if (appointmentsError) {
+    throw new DomainError("Unable to load customer bookings", {
+      error: appointmentsError,
+      filter,
+    });
+  }
+
+  if (!appointmentRows || appointmentRows.length === 0) {
+    return [];
+  }
+
+  const bookingCountsByCustomerId = new Map<string, number>();
+  const latestBookingByCustomerId = new Map<string, string>();
+
+  for (const appointment of appointmentRows) {
+    bookingCountsByCustomerId.set(
+      appointment.customer_id,
+      (bookingCountsByCustomerId.get(appointment.customer_id) ?? 0) + 1,
+    );
+
+    if (!latestBookingByCustomerId.has(appointment.customer_id)) {
+      latestBookingByCustomerId.set(appointment.customer_id, appointment.start_time);
+    }
+  }
+
+  let customersQuery = supabase
+    .from(TABLES.customers)
+    .select()
+    .eq("business_id", filter.businessId)
+    .eq("region_code", REGION)
+    .in("id", [...bookingCountsByCustomerId.keys()]);
+
+  if (filter.query) {
+    customersQuery = customersQuery.or(
+      `full_name.ilike.%${filter.query}%,email.ilike.%${filter.query}%`,
+    );
+  }
+
+  const { data, error } = await customersQuery;
+
+  if (error) {
+    throw new DomainError("Unable to load booked customers", { error, filter });
+  }
+
+  const customers = (data ?? [])
+    .map(mapCustomer)
+    .map((customer) => ({
+      ...customer,
+      bookingCount: bookingCountsByCustomerId.get(customer.id) ?? 0,
+    }))
+    .filter((customer) => customer.bookingCount > 0)
+    .sort((left, right) => {
+      if (right.bookingCount !== left.bookingCount) {
+        return right.bookingCount - left.bookingCount;
+      }
+
+      const leftLatestBooking = latestBookingByCustomerId.get(left.id) ?? left.createdAt;
+      const rightLatestBooking = latestBookingByCustomerId.get(right.id) ?? right.createdAt;
+
+      return rightLatestBooking.localeCompare(leftLatestBooking);
+    });
+
+  if (typeof filter.limit === "number") {
+    return customers.slice(0, filter.limit);
+  }
+
+  return customers;
 }

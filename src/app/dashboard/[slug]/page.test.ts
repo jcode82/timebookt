@@ -57,6 +57,19 @@ describe("DashboardPage", () => {
           updatedAt: "2026-04-20T10:00:00.000Z",
         },
       ],
+      customers: [
+        {
+          id: "cust-1",
+          businessId: "biz-1",
+          fullName: "Jamie Fox",
+          email: "jamie@example.com",
+          phone: "555-0110",
+          locale: null,
+          createdAt: "2026-04-20T10:00:00.000Z",
+          updatedAt: "2026-04-20T10:00:00.000Z",
+          bookingCount: 2,
+        },
+      ],
       services: [
         {
           id: "svc-1",
@@ -91,7 +104,11 @@ describe("DashboardPage", () => {
     expect(html).toContain('href="#services"');
     expect(html).toContain('href="#availability"');
     expect(html).toContain('href="#appointments"');
+    expect(html).toContain('href="#customers"');
     expect(html).toContain("Appointment management");
+    expect(html).toContain("Customer management");
+    expect(html).toContain("Jamie Fox");
+    expect(html).toContain("View appointments");
     expect(html).toContain("Create service");
     expect(html).toContain("Weekly schedule");
     expect(html).toContain("Add availability block");
@@ -113,6 +130,7 @@ describe("DashboardPage", () => {
         recentAuditLog: [],
       },
       appointments: [],
+      customers: [],
       services: [],
       availability: [],
     });

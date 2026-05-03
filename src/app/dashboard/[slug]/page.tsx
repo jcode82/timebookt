@@ -5,6 +5,7 @@ import { DashboardHeader } from "@/features/dashboard/components/DashboardHeader
 import { DashboardSidebar } from "@/features/dashboard/components/DashboardSidebar";
 import { MetricsGrid } from "@/features/dashboard/components/MetricsGrid";
 import { AppointmentsPanel } from "@/features/dashboard/components/AppointmentsPanel";
+import { CustomersPanel } from "@/features/dashboard/components/CustomersPanel";
 import { ServicesPanel } from "@/features/dashboard/components/ServicesPanel";
 import { AvailabilityPanel } from "@/features/dashboard/components/AvailabilityPanel";
 
@@ -30,6 +31,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
         <DashboardHeader businessName={data.businessName} slug={data.slug} timezone={data.timezone} />
         <DashboardSidebar
           businessSlug={data.slug}
+          customersCount={data.customers.length}
           upcomingAppointments={data.metrics.upcomingAppointments}
           servicesCount={data.services.length}
           availabilityCount={data.availability.length}
@@ -49,6 +51,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
         <div className="grid gap-8 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
           <AppointmentsPanel businessId={data.businessId} timezone={data.timezone} />
           <div className="space-y-8">
+            <CustomersPanel customers={data.customers} />
             <ServicesPanel
               businessId={data.businessId}
               businessSlug={data.slug}

@@ -2,6 +2,7 @@ import React from "react";
 
 interface DashboardSidebarProps {
   businessSlug: string;
+  customersCount: number;
   upcomingAppointments: number;
   servicesCount: number;
   availabilityCount: number;
@@ -28,10 +29,16 @@ const sections = [
     label: "Appointments",
     description: "Upcoming bookings",
   },
+  {
+    href: "#customers",
+    label: "Customers",
+    description: "Booked customer list",
+  },
 ] as const;
 
 export function DashboardSidebar({
   businessSlug,
+  customersCount,
   upcomingAppointments,
   servicesCount,
   availabilityCount,
@@ -41,6 +48,7 @@ export function DashboardSidebar({
     Services: servicesCount,
     Availability: availabilityCount,
     Appointments: upcomingAppointments,
+    Customers: customersCount,
   };
 
   return (
