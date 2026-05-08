@@ -58,6 +58,7 @@ export interface ProviderAvailabilityRequest {
   businessId: string;
   providerId: string;
   date: string;
+  businessTimezone: string;
 }
 
 export interface ProviderAvailabilitySlot {

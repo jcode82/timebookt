@@ -7,6 +7,7 @@ import { MetricsGrid } from "@/features/dashboard/components/MetricsGrid";
 import { AppointmentsPanel } from "@/features/dashboard/components/AppointmentsPanel";
 import { CustomersPanel } from "@/features/dashboard/components/CustomersPanel";
 import { ServicesPanel } from "@/features/dashboard/components/ServicesPanel";
+import { BookingPageSettingsPanel } from "@/features/dashboard/components/BookingPageSettingsPanel";
 import { AvailabilityPanel } from "@/features/dashboard/components/AvailabilityPanel";
 import { AvailabilityExceptionsPanel } from "@/features/dashboard/components/AvailabilityExceptionsPanel";
 
@@ -57,6 +58,12 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
             <ServicesPanel
               businessId={data.businessId}
               businessSlug={data.slug}
+              services={data.services}
+            />
+            <BookingPageSettingsPanel
+              businessId={data.businessId}
+              businessSlug={data.slug}
+              settings={data.settings}
               services={data.services}
             />
             <AvailabilityPanel

@@ -33,6 +33,20 @@ describe("DashboardPage", () => {
       slug: "studio-north",
       timezone: "America/New_York",
       isOnboarded: true,
+      settings: {
+        bookingWindowDays: 120,
+        cancellationWindowHours: 4,
+        bufferMinutes: 10,
+        notifications: {
+          email: true,
+          sms: false,
+        },
+        publicBookingPage: {
+          showBusinessName: true,
+          serviceVisibility: "all",
+          visibleServiceIds: [],
+        },
+      },
       metrics: {
         totalAppointments: 24,
         bookingsToday: 3,
@@ -125,6 +139,7 @@ describe("DashboardPage", () => {
 
     expect(html).toContain("Operations at a glance");
     expect(html).toContain('href="#services"');
+    expect(html).toContain('href="#booking-page-settings"');
     expect(html).toContain('href="#availability"');
     expect(html).toContain('href="#availability-exceptions"');
     expect(html).toContain('href="#appointments"');
@@ -134,6 +149,8 @@ describe("DashboardPage", () => {
     expect(html).toContain("Jamie Fox");
     expect(html).toContain("View appointments");
     expect(html).toContain("Create service");
+    expect(html).toContain("Public booking page settings");
+    expect(html).toContain("/studio-north/book");
     expect(html).toContain("Weekly schedule");
     expect(html).toContain("Add availability block");
     expect(html).toContain("Availability exceptions");
@@ -147,6 +164,20 @@ describe("DashboardPage", () => {
       slug: "studio-north",
       timezone: "America/New_York",
       isOnboarded: false,
+      settings: {
+        bookingWindowDays: 120,
+        cancellationWindowHours: 4,
+        bufferMinutes: 10,
+        notifications: {
+          email: true,
+          sms: false,
+        },
+        publicBookingPage: {
+          showBusinessName: true,
+          serviceVisibility: "all",
+          visibleServiceIds: [],
+        },
+      },
       metrics: {
         totalAppointments: 0,
         bookingsToday: 0,

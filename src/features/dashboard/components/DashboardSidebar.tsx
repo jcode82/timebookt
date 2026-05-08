@@ -21,6 +21,11 @@ const sections = [
     description: "Catalog and pricing",
   },
   {
+    href: "#booking-page-settings",
+    label: "Booking page",
+    description: "Public page controls",
+  },
+  {
     href: "#availability",
     label: "Availability",
     description: "Weekly schedule blocks",
@@ -53,6 +58,7 @@ export function DashboardSidebar({
   const countsBySection: Record<string, number | null> = {
     Overview: null,
     Services: servicesCount,
+    "Booking page": null,
     Availability: availabilityCount,
     Overrides: availabilityExceptionsCount,
     Appointments: upcomingAppointments,

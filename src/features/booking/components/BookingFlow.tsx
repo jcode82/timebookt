@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useMemo, useState, useTransition } from "react";
 import type { ProviderAvailabilitySlot } from "@/domain/appointments";
 import type { ServiceRecord } from "@/domain/services/types";
@@ -15,17 +16,32 @@ interface ProviderOption {
 interface BookingFlowProps {
   businessId: string;
   businessSlug: string;
+  businessTimezone: string;
   services: ServiceRecord[];
   providers: ProviderOption[];
 }
 
-const formatDateInput = (value: Date) => value.toISOString().slice(0, 10);
+const formatDateInput = (value: Date, timeZone: string) =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(value);
 
-export function BookingFlow({ businessId, businessSlug, services, providers }: BookingFlowProps) {
+function formatTimeLabel(value: string, timeZone: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+export function BookingFlow({ businessId, businessSlug, businessTimezone, services, providers }: BookingFlowProps) {
   const [step, setStep] = useState<(typeof BOOKING_STEPS)[number]>(BOOKING_STEPS[0]);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(services[0]?.id ?? null);
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(providers[0]?.id ?? null);
-  const [selectedDate, setSelectedDate] = useState<string>(formatDateInput(new Date()));
+  const [selectedDate, setSelectedDate] = useState<string>(formatDateInput(new Date(), businessTimezone));
   const [slots, setSlots] = useState<ProviderAvailabilitySlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<ProviderAvailabilitySlot | null>(null);
   const [confirmation, setConfirmation] = useState<BookingConfirmation | null>(null);
@@ -50,7 +66,7 @@ export function BookingFlow({ businessId, businessSlug, services, providers }: B
 
   const fetchSlots = (providerId: string, date: string) => {
     startTransition(async () => {
-      const result = await getProviderAvailabilityAction({ businessId, providerId, date });
+      const result = await getProviderAvailabilityAction({ businessId, providerId, date, businessTimezone });
       setSlots(result);
       setSelectedSlot(result[0] ?? null);
     });
@@ -177,7 +193,9 @@ export function BookingFlow({ businessId, businessSlug, services, providers }: B
               </p>
             </button>
           ))}
-          {services.length === 0 && <p className="text-sm text-slate-500">No services configured yet.</p>}
+          {services.length === 0 && (
+            <p className="text-sm text-slate-500">No services are currently available for online booking.</p>
+          )}
         </div>
       )}
 
@@ -238,7 +256,7 @@ export function BookingFlow({ businessId, businessSlug, services, providers }: B
                 className={`rounded-2xl border p-4 text-left transition ${selectedSlot?.startTime === slot.startTime ? "border-emerald-500 bg-emerald-50" : "border-slate-200"}`}
               >
                 <p className="text-sm font-semibold text-slate-900">
-                  {new Date(slot.startTime).toLocaleTimeString()} - {new Date(slot.endTime).toLocaleTimeString()}
+                  {formatTimeLabel(slot.startTime, businessTimezone)} - {formatTimeLabel(slot.endTime, businessTimezone)}
                 </p>
               </button>
             ))}
@@ -255,7 +273,11 @@ export function BookingFlow({ businessId, businessSlug, services, providers }: B
             Service: {selectedService?.name ?? "-"} - Provider: {selectedProvider?.name ?? "-"}
           </p>
           <p className="text-sm text-slate-500">
-            Time: {selectedSlot ? new Date(selectedSlot.startTime).toLocaleString() : "-"}
+            Time: {selectedSlot ? new Intl.DateTimeFormat("en-US", {
+              timeZone: businessTimezone,
+              dateStyle: "medium",
+              timeStyle: "short",
+            }).format(new Date(selectedSlot.startTime)) : "-"}
           </p>
           <input
             className="w-full rounded-2xl border border-slate-200 px-4 py-2"

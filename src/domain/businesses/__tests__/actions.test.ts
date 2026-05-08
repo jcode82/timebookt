@@ -50,6 +50,11 @@ describe("business actions", () => {
             email: true,
             sms: false,
           },
+          publicBookingPage: {
+            showBusinessName: true,
+            serviceVisibility: "all",
+            visibleServiceIds: [],
+          },
         },
         created_at: "2026-04-16T12:00:00.000Z",
         updated_at: "2026-04-16T12:00:00.000Z",

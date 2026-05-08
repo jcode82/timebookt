@@ -1,7 +1,12 @@
 "use server";
 
 import { unstable_cache } from "next/cache";
-import { getBusinessBySlug, getBusinessDashboardMetrics, listStaffForBusiness } from "@/domain/businesses";
+import {
+  getBusinessBySlug,
+  getBusinessDashboardMetrics,
+  listStaffForBusiness,
+  type BusinessSettings,
+} from "@/domain/businesses";
 import {
   getAvailability,
   getAvailabilityExceptions,
@@ -17,6 +22,7 @@ export interface DashboardData {
   slug: string;
   timezone: string;
   isOnboarded: boolean;
+  settings: BusinessSettings;
   metrics: Awaited<ReturnType<typeof getBusinessDashboardMetrics>>;
   appointments: Awaited<ReturnType<typeof listAppointmentsForBusiness>>;
   customers: Awaited<ReturnType<typeof listBookedCustomersForBusiness>>;
@@ -57,6 +63,7 @@ const getCachedDashboardData = unstable_cache(
       slug: business.slug,
       timezone: business.timezone,
       isOnboarded: business.isOnboarded,
+      settings: business.settings,
       metrics,
       appointments,
       customers,
