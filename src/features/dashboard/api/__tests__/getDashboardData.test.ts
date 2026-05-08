@@ -78,6 +78,11 @@ describe("getDashboardData", () => {
           email: true,
           sms: false,
         },
+        publicBookingPage: {
+          showBusinessName: true,
+          serviceVisibility: "all",
+          visibleServiceIds: [],
+        },
       },
       isOnboarded: false,
       createdAt: "2026-04-17T10:00:00.000Z",
@@ -172,6 +177,11 @@ describe("getDashboardData", () => {
     expect(result?.isOnboarded).toBe(false);
     expect(result?.businessId).toBe("biz-1");
     expect(result?.timezone).toBe("America/New_York");
+    expect(result?.settings.publicBookingPage).toEqual({
+      showBusinessName: true,
+      serviceVisibility: "all",
+      visibleServiceIds: [],
+    });
     expect(result?.customers).toHaveLength(1);
     expect(result?.services).toHaveLength(1);
     expect(result?.availability).toHaveLength(1);

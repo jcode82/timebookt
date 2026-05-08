@@ -1,5 +1,11 @@
 import type { Json } from "../../../supabase/types";
 
+export interface PublicBookingPageSettings {
+  showBusinessName: boolean;
+  serviceVisibility: "all" | "selected";
+  visibleServiceIds: string[];
+}
+
 export interface BusinessSettings {
   bookingWindowDays: number;
   cancellationWindowHours: number;
@@ -8,6 +14,7 @@ export interface BusinessSettings {
     email: boolean;
     sms: boolean;
   };
+  publicBookingPage: PublicBookingPageSettings;
 }
 
 export interface BusinessProfile {

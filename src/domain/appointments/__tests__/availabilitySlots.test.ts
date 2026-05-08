@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 type AvailabilityBlockTestRow = {
   id: string;
   business_id: string;
-  staff_id: string;
+  staff_id: string | null;
   region_code: string;
   day_of_week: number;
   start_time: string;
@@ -28,8 +28,8 @@ const baseAvailabilityRow: AvailabilityBlockTestRow = {
   staff_id: "staff-1",
   region_code: "test-region",
   day_of_week: 1,
-  start_time: "14:00:00",
-  end_time: "15:00:00",
+  start_time: "09:00:00",
+  end_time: "10:00:00",
   capacity: 1,
   created_at: "2026-02-01T00:00:00.000Z",
 };
@@ -65,8 +65,8 @@ const baseExceptionRow: AvailabilityExceptionTestRow = {
   region_code: "test-region",
   exception_date: "2026-02-16",
   is_closed: false,
-  start_time: "15:00:00",
-  end_time: "16:00:00",
+  start_time: "10:00:00",
+  end_time: "11:00:00",
   capacity: 1,
   created_at: "2026-02-01T00:00:00.000Z",
   updated_at: "2026-02-01T00:00:00.000Z",
@@ -75,6 +75,12 @@ const baseExceptionRow: AvailabilityExceptionTestRow = {
 let availabilityRows: AvailabilityBlockTestRow[] = [baseAvailabilityRow];
 let exceptionRows: AvailabilityExceptionTestRow[] = [];
 let appointmentRows: AppointmentTestRow[] = [baseAppointmentRow];
+const baseAvailabilityRequest = {
+  businessId: "biz-1",
+  providerId: "staff-1",
+  date: "2026-02-16",
+  businessTimezone: "America/New_York",
+} as const;
 
 beforeEach(() => {
   availabilityRows = [{ ...baseAvailabilityRow }];
@@ -182,11 +188,7 @@ import { getProviderAvailabilityForDate } from "../actions";
 
 describe("getProviderAvailabilityForDate", () => {
   it("removes slots that overlap scheduled appointments", async () => {
-    const slots = await getProviderAvailabilityForDate({
-      businessId: "biz-1",
-      providerId: "staff-1",
-      date: "2026-02-16",
-    });
+    const slots = await getProviderAvailabilityForDate(baseAvailabilityRequest);
 
     expect(slots).toEqual([
       {
@@ -199,11 +201,7 @@ describe("getProviderAvailabilityForDate", () => {
   it("keeps slots when overlap is below capacity", async () => {
     availabilityRows = [{ ...baseAvailabilityRow, capacity: 2 }];
 
-    const slots = await getProviderAvailabilityForDate({
-      businessId: "biz-1",
-      providerId: "staff-1",
-      date: "2026-02-16",
-    });
+    const slots = await getProviderAvailabilityForDate(baseAvailabilityRequest);
 
     expect(slots).toEqual([
       {
@@ -229,11 +227,7 @@ describe("getProviderAvailabilityForDate", () => {
       },
     ];
 
-    const slots = await getProviderAvailabilityForDate({
-      businessId: "biz-1",
-      providerId: "staff-1",
-      date: "2026-02-16",
-    });
+    const slots = await getProviderAvailabilityForDate(baseAvailabilityRequest);
 
     expect(slots).toEqual([
       {
@@ -246,11 +240,7 @@ describe("getProviderAvailabilityForDate", () => {
   it("returns no slots when a date exception closes availability", async () => {
     exceptionRows = [{ ...baseExceptionRow, is_closed: true, start_time: null, end_time: null }];
 
-    const slots = await getProviderAvailabilityForDate({
-      businessId: "biz-1",
-      providerId: "staff-1",
-      date: "2026-02-16",
-    });
+    const slots = await getProviderAvailabilityForDate(baseAvailabilityRequest);
 
     expect(slots).toEqual([]);
   });
@@ -258,11 +248,7 @@ describe("getProviderAvailabilityForDate", () => {
   it("uses an open date exception instead of recurring availability", async () => {
     exceptionRows = [{ ...baseExceptionRow }];
 
-    const slots = await getProviderAvailabilityForDate({
-      businessId: "biz-1",
-      providerId: "staff-1",
-      date: "2026-02-16",
-    });
+    const slots = await getProviderAvailabilityForDate(baseAvailabilityRequest);
 
     expect(slots).toEqual([
       {
@@ -272,6 +258,45 @@ describe("getProviderAvailabilityForDate", () => {
       {
         startTime: "2026-02-16T15:30:00.000Z",
         endTime: "2026-02-16T16:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("falls back to business-level availability blocks when provider-specific blocks do not exist", async () => {
+    availabilityRows = [{ ...baseAvailabilityRow, staff_id: null }];
+    appointmentRows = [];
+
+    const slots = await getProviderAvailabilityForDate(baseAvailabilityRequest);
+
+    expect(slots).toEqual([
+      {
+        startTime: "2026-02-16T14:00:00.000Z",
+        endTime: "2026-02-16T14:30:00.000Z",
+      },
+      {
+        startTime: "2026-02-16T14:30:00.000Z",
+        endTime: "2026-02-16T15:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("prefers provider-specific availability over business-level fallback blocks", async () => {
+    availabilityRows = [
+      { ...baseAvailabilityRow, id: "block-business", staff_id: null, start_time: "07:00:00", end_time: "08:00:00" },
+      { ...baseAvailabilityRow, id: "block-provider", staff_id: "staff-1", start_time: "09:00:00", end_time: "10:00:00" },
+    ];
+    appointmentRows = [];
+
+    const slots = await getProviderAvailabilityForDate(baseAvailabilityRequest);
+
+    expect(slots).toEqual([
+      {
+        startTime: "2026-02-16T14:00:00.000Z",
+        endTime: "2026-02-16T14:30:00.000Z",
+      },
+      {
+        startTime: "2026-02-16T14:30:00.000Z",
+        endTime: "2026-02-16T15:00:00.000Z",
       },
     ]);
   });
@@ -287,11 +312,7 @@ describe("getProviderAvailabilityForDate", () => {
       },
     ];
 
-    const slots = await getProviderAvailabilityForDate({
-      businessId: "biz-1",
-      providerId: "staff-1",
-      date: "2026-02-16",
-    });
+    const slots = await getProviderAvailabilityForDate(baseAvailabilityRequest);
 
     expect(slots).toEqual([
       {
@@ -322,11 +343,7 @@ describe("getProviderAvailabilityForDate", () => {
       },
     ];
 
-    const slots = await getProviderAvailabilityForDate({
-      businessId: "biz-1",
-      providerId: "staff-1",
-      date: "2026-02-16",
-    });
+    const slots = await getProviderAvailabilityForDate(baseAvailabilityRequest);
 
     expect(slots).toEqual([
       {
@@ -352,11 +369,7 @@ describe("getProviderAvailabilityForDate", () => {
       },
     ];
 
-    const slots = await getProviderAvailabilityForDate({
-      businessId: "biz-1",
-      providerId: "staff-1",
-      date: "2026-02-16",
-    });
+    const slots = await getProviderAvailabilityForDate(baseAvailabilityRequest);
 
     expect(slots).toEqual([
       {
@@ -381,11 +394,7 @@ describe("getProviderAvailabilityForDate", () => {
       },
     ];
 
-    const slots = await getProviderAvailabilityForDate({
-      businessId: "biz-1",
-      providerId: "staff-1",
-      date: "2026-02-16",
-    });
+    const slots = await getProviderAvailabilityForDate(baseAvailabilityRequest);
 
     expect(slots).toEqual([
       {
@@ -405,17 +414,13 @@ describe("getProviderAvailabilityForDate", () => {
       {
         ...baseAvailabilityRow,
         id: "block-2",
-        start_time: "14:30:00",
-        end_time: "15:30:00",
+        start_time: "09:30:00",
+        end_time: "10:30:00",
       },
     ];
     appointmentRows = [];
 
-    const slots = await getProviderAvailabilityForDate({
-      businessId: "biz-1",
-      providerId: "staff-1",
-      date: "2026-02-16",
-    });
+    const slots = await getProviderAvailabilityForDate(baseAvailabilityRequest);
 
     expect(slots).toEqual([
       {
@@ -439,18 +444,14 @@ describe("getProviderAvailabilityForDate", () => {
       {
         ...baseExceptionRow,
         id: "exception-newer",
-        start_time: "16:00:00",
-        end_time: "17:00:00",
+        start_time: "11:00:00",
+        end_time: "12:00:00",
         created_at: "2026-02-02T00:00:00.000Z",
       },
     ];
     appointmentRows = [];
 
-    const slots = await getProviderAvailabilityForDate({
-      businessId: "biz-1",
-      providerId: "staff-1",
-      date: "2026-02-16",
-    });
+    const slots = await getProviderAvailabilityForDate(baseAvailabilityRequest);
 
     expect(slots).toEqual([
       {
@@ -478,12 +479,38 @@ describe("getProviderAvailabilityForDate", () => {
     ];
     appointmentRows = [];
 
+    const slots = await getProviderAvailabilityForDate(baseAvailabilityRequest);
+
+    expect(slots).toEqual([]);
+  });
+
+  it("converts business-local availability into UTC slots using the business timezone", async () => {
+    availabilityRows = [
+      {
+        ...baseAvailabilityRow,
+        day_of_week: 2,
+        start_time: "09:00:00",
+        end_time: "10:00:00",
+      },
+    ];
+    appointmentRows = [];
+
     const slots = await getProviderAvailabilityForDate({
       businessId: "biz-1",
       providerId: "staff-1",
-      date: "2026-02-16",
+      date: "2026-05-19",
+      businessTimezone: "America/New_York",
     });
 
-    expect(slots).toEqual([]);
+    expect(slots).toEqual([
+      {
+        startTime: "2026-05-19T13:00:00.000Z",
+        endTime: "2026-05-19T13:30:00.000Z",
+      },
+      {
+        startTime: "2026-05-19T13:30:00.000Z",
+        endTime: "2026-05-19T14:00:00.000Z",
+      },
+    ]);
   });
 });

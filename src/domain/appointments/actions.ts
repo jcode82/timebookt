@@ -82,6 +82,7 @@ const providerAvailabilitySchema = z.object({
   businessId: z.string().min(1),
   providerId: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
+  businessTimezone: z.string().min(1),
 });
 
 const SLOT_MINUTES = 30;
@@ -93,7 +94,33 @@ const buildDayRange = (dateStr: string) => {
   return { dayStart, dayEnd, dayOfWeek: dayStart.getUTCDay() };
 };
 
-const applyTimeToDate = (dateBase: Date, timeIso: string) => {
+const getTimeZoneParts = (date: Date, timeZone: string) => {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+
+  const parts = formatter.formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)?.value;
+
+  return {
+    year: Number(part("year")),
+    month: Number(part("month")),
+    day: Number(part("day")),
+    hour: Number(part("hour")),
+    minute: Number(part("minute")),
+    second: Number(part("second")),
+  };
+};
+
+const applyTimeToDate = (dateStr: string, timeIso: string, timeZone: string) => {
+  const [year, month, day] = dateStr.split("-").map(Number);
   const match = /^(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,6})?)?$/.exec(timeIso);
   if (!match) {
     return null;
@@ -104,17 +131,47 @@ const applyTimeToDate = (dateBase: Date, timeIso: string) => {
   if (hours > 23 || minutes > 59 || seconds > 59) {
     return null;
   }
-  return new Date(
-    Date.UTC(
-      dateBase.getUTCFullYear(),
-      dateBase.getUTCMonth(),
-      dateBase.getUTCDate(),
-      hours,
-      minutes,
-      seconds,
+
+  let utcMillis = Date.UTC(year, month - 1, day, hours, minutes, seconds, 0);
+  const targetLocalMillis = Date.UTC(year, month - 1, day, hours, minutes, seconds, 0);
+
+  for (let index = 0; index < 4; index += 1) {
+    const actualParts = getTimeZoneParts(new Date(utcMillis), timeZone);
+    const actualLocalMillis = Date.UTC(
+      actualParts.year,
+      actualParts.month - 1,
+      actualParts.day,
+      actualParts.hour,
+      actualParts.minute,
+      actualParts.second,
       0,
-    ),
-  );
+    );
+    const diff = targetLocalMillis - actualLocalMillis;
+
+    if (diff === 0) {
+      return new Date(utcMillis);
+    }
+
+    utcMillis += diff;
+  }
+
+  return new Date(utcMillis);
+};
+
+const buildBusinessDayRange = (dateStr: string, timeZone: string) => {
+  const { dayOfWeek } = buildDayRange(dateStr);
+  const dayStart = applyTimeToDate(dateStr, "00:00:00", timeZone);
+
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const nextDate = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0));
+  const nextDateStr = nextDate.toISOString().slice(0, 10);
+  const nextDayStart = applyTimeToDate(nextDateStr, "00:00:00", timeZone);
+
+  if (!dayStart || !nextDayStart) {
+    throw new DomainError("Unable to calculate business day range", { dateStr, timeZone });
+  }
+
+  return { dayStart, dayEnd: nextDayStart, dayOfWeek };
 };
 
 const mapAvailability = (row: Tables<"availability_blocks">): AvailabilityBlock => ({
@@ -713,15 +770,14 @@ export async function getProviderAvailabilityForDate(
     });
   }
 
-  const { businessId, providerId, date } = parsed.data;
-  const { dayStart, dayEnd, dayOfWeek } = buildDayRange(date);
+  const { businessId, providerId, date, businessTimezone } = parsed.data;
+  const { dayStart, dayEnd, dayOfWeek } = buildBusinessDayRange(date, businessTimezone);
   const supabase = getSupabaseAdmin();
 
   const [availabilityRes, exceptionsRes, appointmentsRes] = await Promise.all([
     supabase
       .from(TABLES.availabilityBlocks)
       .select("id, staff_id, day_of_week, start_time, end_time, capacity")
-      .eq("staff_id", providerId)
       .eq("business_id", businessId)
       .eq("day_of_week", dayOfWeek)
       .eq("region_code", REGION),
@@ -768,6 +824,8 @@ export async function getProviderAvailabilityForDate(
   const exceptionRows = (exceptionsRes.data ?? []) as Tables<"availability_exceptions">[];
   const appointmentRows = (appointmentsRes.data ?? []) as Tables<"appointments">[];
   const exception = exceptionRows[0];
+  const providerSpecificAvailabilityRows = availabilityRows.filter((row) => row.staff_id === providerId);
+  const fallbackAvailabilityRows = availabilityRows.filter((row) => row.staff_id == null);
   const effectiveAvailabilityRows: SlotAvailabilityWindow[] = exception
     ? exception.is_closed || !exception.start_time || !exception.end_time
       ? []
@@ -778,7 +836,9 @@ export async function getProviderAvailabilityForDate(
             capacity: exception.capacity,
           },
         ]
-    : availabilityRows;
+    : providerSpecificAvailabilityRows.length > 0
+      ? providerSpecificAvailabilityRows
+      : fallbackAvailabilityRows;
   const dayStartMs = dayStart.getTime();
   const dayEndMs = dayEnd.getTime();
   const filteredAppointments = appointmentRows.filter((appt) => {
@@ -792,8 +852,8 @@ export async function getProviderAvailabilityForDate(
 
   effectiveAvailabilityRows.forEach((block) => {
     if (!block.start_time || !block.end_time) return;
-    const blockStart = applyTimeToDate(dayStart, block.start_time);
-    const blockEnd = applyTimeToDate(dayStart, block.end_time);
+    const blockStart = applyTimeToDate(date, block.start_time, businessTimezone);
+    const blockEnd = applyTimeToDate(date, block.end_time, businessTimezone);
     if (!blockStart || !blockEnd) return;
     for (let ts = blockStart.getTime(); ts + slotMs <= blockEnd.getTime(); ts += slotMs) {
       const slotStart = new Date(ts);

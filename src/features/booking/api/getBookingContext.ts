@@ -33,5 +33,11 @@ export async function getBookingContext(slug: string) {
     name: provider.full_name ?? "Provider",
   }));
 
-  return { business, services, providers };
+  const bookingPageSettings = business.settings.publicBookingPage;
+  const visibleServices =
+    bookingPageSettings.serviceVisibility === "selected"
+      ? services.filter((service) => bookingPageSettings.visibleServiceIds.includes(service.id))
+      : services;
+
+  return { business, services: visibleServices, providers };
 }

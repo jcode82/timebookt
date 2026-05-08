@@ -10,6 +10,7 @@ import type {
   BusinessProfile,
   BusinessSettings,
   CreateBusinessInput,
+  PublicBookingPageSettings,
   StaffMember,
 } from "./types";
 
@@ -21,22 +22,58 @@ const defaultSettings = (): BusinessSettings => ({
     email: true,
     sms: false,
   },
+  publicBookingPage: {
+    showBusinessName: true,
+    serviceVisibility: "all",
+    visibleServiceIds: [],
+  },
 });
 
-const isBusinessSettings = (value: unknown): value is BusinessSettings => {
-  if (!value || typeof value !== "object") {
-    return false;
+const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object";
+
+const normalizePublicBookingPageSettings = (value: unknown): PublicBookingPageSettings => {
+  const defaults = defaultSettings().publicBookingPage;
+  if (!isRecord(value)) {
+    return defaults;
   }
-  const candidate = value as Partial<BusinessSettings>;
-  const notifications = candidate.notifications as Partial<BusinessSettings["notifications"]> | undefined;
-  return (
-    typeof candidate.bookingWindowDays === "number" &&
-    typeof candidate.cancellationWindowHours === "number" &&
-    typeof candidate.bufferMinutes === "number" &&
-    notifications !== undefined &&
-    typeof notifications.email === "boolean" &&
-    typeof notifications.sms === "boolean"
-  );
+
+  const visibleServiceIds = Array.isArray(value.visibleServiceIds)
+    ? value.visibleServiceIds.filter((serviceId): serviceId is string => typeof serviceId === "string" && serviceId.length > 0)
+    : defaults.visibleServiceIds;
+
+  return {
+    showBusinessName:
+      typeof value.showBusinessName === "boolean" ? value.showBusinessName : defaults.showBusinessName,
+    serviceVisibility:
+      value.serviceVisibility === "selected" || value.serviceVisibility === "all"
+        ? value.serviceVisibility
+        : defaults.serviceVisibility,
+    visibleServiceIds,
+  };
+};
+
+const normalizeBusinessSettings = (value: unknown): BusinessSettings => {
+  const defaults = defaultSettings();
+  if (!isRecord(value)) {
+    return defaults;
+  }
+
+  const notifications = isRecord(value.notifications) ? value.notifications : {};
+
+  return {
+    bookingWindowDays:
+      typeof value.bookingWindowDays === "number" ? value.bookingWindowDays : defaults.bookingWindowDays,
+    cancellationWindowHours:
+      typeof value.cancellationWindowHours === "number"
+        ? value.cancellationWindowHours
+        : defaults.cancellationWindowHours,
+    bufferMinutes: typeof value.bufferMinutes === "number" ? value.bufferMinutes : defaults.bufferMinutes,
+    notifications: {
+      email: typeof notifications.email === "boolean" ? notifications.email : defaults.notifications.email,
+      sms: typeof notifications.sms === "boolean" ? notifications.sms : defaults.notifications.sms,
+    },
+    publicBookingPage: normalizePublicBookingPageSettings(value.publicBookingPage),
+  };
 };
 
 const mapBusiness = (row: Tables<typeof TABLES.businesses>): BusinessProfile => ({
@@ -48,7 +85,7 @@ const mapBusiness = (row: Tables<typeof TABLES.businesses>): BusinessProfile => 
   timezone: row.timezone,
   contactEmail: row.contact_email,
   contactPhone: row.contact_phone,
-  settings: isBusinessSettings(row.settings) ? row.settings : defaultSettings(),
+  settings: normalizeBusinessSettings(row.settings),
   isOnboarded: row.is_onboarded,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
@@ -173,6 +210,57 @@ export async function getBusinessBySlug(slug: string): Promise<BusinessProfile |
   }
 
   return data ? mapBusiness(data) : null;
+}
+
+export async function updateBusinessPublicBookingPageSettings(input: {
+  businessId: string;
+  showBusinessName: boolean;
+  serviceVisibility: PublicBookingPageSettings["serviceVisibility"];
+  visibleServiceIds: string[];
+}): Promise<BusinessProfile> {
+  const supabase = getSupabaseAdmin();
+  const { data: existingBusiness, error: readError } = await supabase
+    .from(TABLES.businesses)
+    .select()
+    .eq("id", input.businessId)
+    .eq("region_code", REGION)
+    .maybeSingle();
+
+  if (readError || !existingBusiness) {
+    throw new DomainError("Unable to load business settings", {
+      businessId: input.businessId,
+      error: readError,
+    });
+  }
+
+  const currentSettings = normalizeBusinessSettings(existingBusiness.settings);
+  const nextSettings: BusinessSettings = {
+    ...currentSettings,
+    publicBookingPage: {
+      showBusinessName: input.showBusinessName,
+      serviceVisibility: input.serviceVisibility,
+      visibleServiceIds: input.visibleServiceIds,
+    },
+  };
+
+  const { data: updatedBusiness, error: updateError } = await supabase
+    .from(TABLES.businesses)
+    .update({
+      settings: nextSettings as unknown as TablesInsert<typeof TABLES.businesses>["settings"],
+    })
+    .eq("id", input.businessId)
+    .eq("region_code", REGION)
+    .select()
+    .maybeSingle();
+
+  if (updateError || !updatedBusiness) {
+    throw new DomainError("Unable to update business settings", {
+      businessId: input.businessId,
+      error: updateError,
+    });
+  }
+
+  return mapBusiness(updatedBusiness);
 }
 
 export async function listStaffForBusiness(businessId: string): Promise<StaffMember[]> {

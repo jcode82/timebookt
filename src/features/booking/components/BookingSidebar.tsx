@@ -1,3 +1,5 @@
+import React from "react";
+
 interface BookingSidebarProps {
   contactEmail: string;
   contactPhone?: string | null;
