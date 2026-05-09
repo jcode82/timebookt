@@ -11,6 +11,7 @@ import {
   type SetDashboardServiceActiveStateInput,
   type UpdateDashboardServiceInput,
 } from "@/features/dashboard/utils/serviceManagementSchema";
+import { requireBusinessOwnerAccess } from "@/lib/auth/server";
 
 function refreshDashboard(slug: string) {
   revalidateTag("dashboard-data");
@@ -35,6 +36,7 @@ export async function createDashboardServiceAction(
   try {
     const payload = createDashboardServiceSchema.parse(input);
     const { businessSlug, ...serviceInput } = payload;
+    await requireBusinessOwnerAccess(serviceInput.businessId);
     const service = await createService(serviceInput);
     refreshDashboard(businessSlug);
     return { ok: true, service };
@@ -49,6 +51,7 @@ export async function updateDashboardServiceAction(
   try {
     const payload = updateDashboardServiceSchema.parse(input);
     const { businessSlug, ...serviceInput } = payload;
+    await requireBusinessOwnerAccess(serviceInput.businessId);
     const service = await updateService(serviceInput);
     refreshDashboard(businessSlug);
     return { ok: true, service };
@@ -62,6 +65,7 @@ export async function setDashboardServiceActiveStateAction(
 ): Promise<ServiceMutationResult> {
   try {
     const payload = setDashboardServiceActiveStateSchema.parse(input);
+    await requireBusinessOwnerAccess(payload.businessId);
     const service = await updateService({
       serviceId: payload.serviceId,
       businessId: payload.businessId,

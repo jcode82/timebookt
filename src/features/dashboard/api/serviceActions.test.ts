@@ -3,11 +3,13 @@ import { DomainError } from "@/lib/errors";
 
 const {
   createServiceMock,
+  requireBusinessOwnerAccessMock,
   updateServiceMock,
   revalidatePathMock,
   revalidateTagMock,
 } = vi.hoisted(() => ({
   createServiceMock: vi.fn(),
+  requireBusinessOwnerAccessMock: vi.fn(),
   updateServiceMock: vi.fn(),
   revalidatePathMock: vi.fn(),
   revalidateTagMock: vi.fn(),
@@ -16,6 +18,10 @@ const {
 vi.mock("@/domain/services/actions", () => ({
   createService: createServiceMock,
   updateService: updateServiceMock,
+}));
+
+vi.mock("@/lib/auth/server", () => ({
+  requireBusinessOwnerAccess: requireBusinessOwnerAccessMock,
 }));
 
 vi.mock("next/cache", () => ({
@@ -32,6 +38,7 @@ import {
 describe("serviceActions", () => {
   beforeEach(() => {
     createServiceMock.mockReset();
+    requireBusinessOwnerAccessMock.mockReset();
     updateServiceMock.mockReset();
     revalidatePathMock.mockReset();
     revalidateTagMock.mockReset();
@@ -64,6 +71,7 @@ describe("serviceActions", () => {
       priceCents: 12500,
       currency: "USD",
     });
+    expect(requireBusinessOwnerAccessMock).toHaveBeenCalledWith("biz-1");
     expect(revalidateTagMock).toHaveBeenCalledWith("dashboard-data");
     expect(revalidatePathMock).toHaveBeenCalledWith("/dashboard/studio-north");
     expect(service).toEqual({
@@ -101,6 +109,7 @@ describe("serviceActions", () => {
       priceCents: 17500,
       currency: "USD",
     });
+    expect(requireBusinessOwnerAccessMock).toHaveBeenCalledWith("biz-1");
     expect(revalidateTagMock).toHaveBeenCalledWith("dashboard-data");
     expect(revalidatePathMock).toHaveBeenCalledWith("/dashboard/studio-north");
     expect(service).toEqual({
@@ -133,6 +142,7 @@ describe("serviceActions", () => {
       businessId: "biz-1",
       isActive: false,
     });
+    expect(requireBusinessOwnerAccessMock).toHaveBeenCalledWith("biz-1");
     expect(revalidateTagMock).toHaveBeenCalledWith("dashboard-data");
     expect(revalidatePathMock).toHaveBeenCalledWith("/dashboard/studio-north");
     expect(service).toEqual({
@@ -153,6 +163,26 @@ describe("serviceActions", () => {
     expect(result).toEqual({
       ok: false,
       message: expect.any(String),
+    });
+    expect(createServiceMock).not.toHaveBeenCalled();
+    expect(revalidateTagMock).not.toHaveBeenCalled();
+    expect(revalidatePathMock).not.toHaveBeenCalled();
+  });
+
+  it("blocks unauthorized mutations before hitting the domain", async () => {
+    requireBusinessOwnerAccessMock.mockRejectedValueOnce(new DomainError("Unauthorized"));
+
+    const result = await createDashboardServiceAction({
+      businessId: "biz-1",
+      businessSlug: "studio-north",
+      name: "Deep Clean",
+      durationMinutes: "90",
+      price: "125.00",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Unauthorized",
     });
     expect(createServiceMock).not.toHaveBeenCalled();
     expect(revalidateTagMock).not.toHaveBeenCalled();

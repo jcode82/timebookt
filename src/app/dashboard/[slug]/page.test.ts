@@ -1,8 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-const { getDashboardDataMock, notFoundMock, redirectMock } = vi.hoisted(() => ({
+const {
+  getDashboardDataMock,
+  getOwnedBusinessBySlugMock,
+  UnauthorizedErrorMock,
+  notFoundMock,
+  redirectMock,
+} = vi.hoisted(() => ({
   getDashboardDataMock: vi.fn(),
+  getOwnedBusinessBySlugMock: vi.fn(),
+  UnauthorizedErrorMock: class UnauthorizedError extends Error {},
   notFoundMock: vi.fn(() => {
     throw new Error("notFound");
   }),
@@ -13,6 +21,12 @@ const { getDashboardDataMock, notFoundMock, redirectMock } = vi.hoisted(() => ({
 
 vi.mock("@/features/dashboard/api/getDashboardData", () => ({
   getDashboardData: getDashboardDataMock,
+}));
+
+vi.mock("@/lib/auth/server", () => ({
+  getOwnedBusinessBySlug: getOwnedBusinessBySlugMock,
+  UNAUTHORIZED_REDIRECT_PATH: "/",
+  UnauthorizedError: UnauthorizedErrorMock,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -26,7 +40,18 @@ vi.mock("next/navigation", () => ({
 import DashboardPage from "./page";
 
 describe("DashboardPage", () => {
+  beforeEach(() => {
+    getDashboardDataMock.mockReset();
+    getOwnedBusinessBySlugMock.mockReset();
+    notFoundMock.mockClear();
+    redirectMock.mockClear();
+  });
+
   it("renders the dashboard foundation sections", async () => {
+    getOwnedBusinessBySlugMock.mockResolvedValueOnce({
+      id: "biz-1",
+      slug: "studio-north",
+    });
     getDashboardDataMock.mockResolvedValueOnce({
       businessId: "biz-1",
       businessName: "Studio North",
@@ -158,6 +183,10 @@ describe("DashboardPage", () => {
   });
 
   it("redirects businesses that have not completed onboarding", async () => {
+    getOwnedBusinessBySlugMock.mockResolvedValueOnce({
+      id: "biz-1",
+      slug: "studio-north",
+    });
     getDashboardDataMock.mockResolvedValueOnce({
       businessId: "biz-1",
       businessName: "Studio North",
@@ -203,7 +232,7 @@ describe("DashboardPage", () => {
   });
 
   it("returns not found when the slug is unknown", async () => {
-    getDashboardDataMock.mockResolvedValueOnce(null);
+    getOwnedBusinessBySlugMock.mockResolvedValueOnce(null);
 
     await expect(
       DashboardPage({
@@ -211,5 +240,18 @@ describe("DashboardPage", () => {
       }),
     ).rejects.toThrow("notFound");
     expect(notFoundMock).toHaveBeenCalled();
+    expect(getDashboardDataMock).not.toHaveBeenCalled();
+  });
+
+  it("redirects when the signed-in user does not own the business", async () => {
+    getOwnedBusinessBySlugMock.mockRejectedValueOnce(new UnauthorizedErrorMock("Unauthorized"));
+
+    await expect(
+      DashboardPage({
+        params: Promise.resolve({ slug: "studio-north" }),
+      }),
+    ).rejects.toThrow("redirect");
+    expect(redirectMock).toHaveBeenCalledWith("/");
+    expect(getDashboardDataMock).not.toHaveBeenCalled();
   });
 });

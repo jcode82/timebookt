@@ -138,6 +138,51 @@ export async function createBusiness(payload: CreateBusinessInput): Promise<Busi
   return mapBusiness(data);
 }
 
+function getOwnerDisplayName(owner: {
+  fullName?: string | null;
+  email?: string | null;
+}) {
+  if (owner.fullName && owner.fullName.trim().length > 0) {
+    return owner.fullName.trim();
+  }
+
+  if (owner.email && owner.email.includes("@")) {
+    return owner.email.split("@")[0] ?? "Owner";
+  }
+
+  return "Owner";
+}
+
+export async function createBusinessForOwner(
+  payload: CreateBusinessInput,
+  owner: {
+    userId: string;
+    email?: string | null;
+    fullName?: string | null;
+  },
+): Promise<BusinessProfile> {
+  const supabase = getSupabaseAdmin();
+  const business = await createBusiness(payload);
+  const { error } = await supabase.from(TABLES.staff).insert({
+    id: owner.userId,
+    business_id: business.id,
+    region_code: REGION,
+    full_name: getOwnerDisplayName(owner),
+    email: owner.email ?? payload.contactEmail,
+    role: "owner",
+  });
+
+  if (error) {
+    throw new DomainError("Unable to link business owner", {
+      businessId: business.id,
+      ownerUserId: owner.userId,
+      error,
+    });
+  }
+
+  return business;
+}
+
 export async function completeBusinessOnboarding(businessId: string): Promise<void> {
   const supabase = getSupabaseAdmin();
   const { data: business, error: businessError } = await supabase
@@ -277,6 +322,31 @@ export async function listStaffForBusiness(businessId: string): Promise<StaffMem
   }
 
   return (data ?? []).map(mapStaffMember);
+}
+
+export async function isBusinessOwnedByUser(input: {
+  businessId: string;
+  userId: string;
+}): Promise<boolean> {
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from(TABLES.staff)
+    .select("id")
+    .eq("id", input.userId)
+    .eq("business_id", input.businessId)
+    .eq("region_code", REGION)
+    .eq("role", "owner")
+    .maybeSingle();
+
+  if (error) {
+    throw new DomainError("Unable to verify business ownership", {
+      businessId: input.businessId,
+      userId: input.userId,
+      error,
+    });
+  }
+
+  return Boolean(data);
 }
 
 export async function listBusinessesByRegion(regionCode: string): Promise<BusinessProfile[]> {

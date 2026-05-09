@@ -10,6 +10,11 @@ import { ServicesPanel } from "@/features/dashboard/components/ServicesPanel";
 import { BookingPageSettingsPanel } from "@/features/dashboard/components/BookingPageSettingsPanel";
 import { AvailabilityPanel } from "@/features/dashboard/components/AvailabilityPanel";
 import { AvailabilityExceptionsPanel } from "@/features/dashboard/components/AvailabilityExceptionsPanel";
+import {
+  getOwnedBusinessBySlug,
+  UNAUTHORIZED_REDIRECT_PATH,
+  UnauthorizedError,
+} from "@/lib/auth/server";
 
 interface DashboardPageProps {
   params: Promise<{ slug: string }>;
@@ -17,6 +22,20 @@ interface DashboardPageProps {
 
 export default async function DashboardPage({ params }: DashboardPageProps) {
   const { slug } = await params;
+  try {
+    const business = await getOwnedBusinessBySlug(slug);
+
+    if (!business) {
+      notFound();
+    }
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      redirect(UNAUTHORIZED_REDIRECT_PATH);
+    }
+
+    throw error;
+  }
+
   const data = await getDashboardData(slug);
 
   if (!data) {

@@ -24,6 +24,7 @@ import {
   type UpdateDashboardAvailabilityInput,
   type UpdateDashboardAvailabilityExceptionInput,
 } from "@/features/dashboard/utils/availabilityManagementSchema";
+import { requireBusinessOwnerAccess } from "@/lib/auth/server";
 
 function refreshDashboard(slug: string) {
   revalidateTag("dashboard-data");
@@ -54,6 +55,7 @@ export async function createDashboardAvailabilityAction(
   try {
     const payload = createDashboardAvailabilitySchema.parse(input);
     const { businessSlug, ...availabilityInput } = payload;
+    await requireBusinessOwnerAccess(availabilityInput.businessId);
     const [availabilityBlock] = await createAvailabilityBlocks([availabilityInput]);
 
     if (!availabilityBlock) {
@@ -73,6 +75,7 @@ export async function updateDashboardAvailabilityAction(
   try {
     const payload = updateDashboardAvailabilitySchema.parse(input);
     const { businessSlug, ...availabilityInput } = payload;
+    await requireBusinessOwnerAccess(availabilityInput.businessId);
     const availabilityBlock = await updateAvailabilityBlock(availabilityInput);
     refreshDashboard(businessSlug);
     return { ok: true, availabilityBlock };
@@ -86,6 +89,7 @@ export async function deleteDashboardAvailabilityAction(
 ): Promise<AvailabilityDeleteResult> {
   try {
     const payload = deleteDashboardAvailabilitySchema.parse(input);
+    await requireBusinessOwnerAccess(payload.businessId);
     await deleteAvailabilityBlock({
       availabilityBlockId: payload.availabilityBlockId,
       businessId: payload.businessId,
@@ -103,6 +107,7 @@ export async function createDashboardAvailabilityExceptionAction(
   try {
     const payload = createDashboardAvailabilityExceptionSchema.parse(input);
     const { businessSlug, ...availabilityExceptionInput } = payload;
+    await requireBusinessOwnerAccess(availabilityExceptionInput.businessId);
     const availabilityException = await createAvailabilityException(availabilityExceptionInput);
     refreshDashboard(businessSlug);
     return { ok: true, availabilityException };
@@ -117,6 +122,7 @@ export async function updateDashboardAvailabilityExceptionAction(
   try {
     const payload = updateDashboardAvailabilityExceptionSchema.parse(input);
     const { businessSlug, ...availabilityExceptionInput } = payload;
+    await requireBusinessOwnerAccess(availabilityExceptionInput.businessId);
     const availabilityException = await updateAvailabilityException(availabilityExceptionInput);
     refreshDashboard(businessSlug);
     return { ok: true, availabilityException };
@@ -130,6 +136,7 @@ export async function deleteDashboardAvailabilityExceptionAction(
 ): Promise<AvailabilityExceptionDeleteResult> {
   try {
     const payload = deleteDashboardAvailabilityExceptionSchema.parse(input);
+    await requireBusinessOwnerAccess(payload.businessId);
     await deleteAvailabilityException({
       availabilityExceptionId: payload.availabilityExceptionId,
       businessId: payload.businessId,
