@@ -8,6 +8,7 @@ import {
   type UpdateDashboardBusinessSettingsInput,
   updateDashboardBusinessSettingsSchema,
 } from "@/features/dashboard/utils/businessSettingsSchema";
+import { requireBusinessOwnerAccess } from "@/lib/auth/server";
 
 function refreshBusinessPages(slug: string) {
   revalidateTag("dashboard-data");
@@ -36,6 +37,7 @@ export async function updateDashboardBusinessSettingsAction(
 ): Promise<BusinessSettingsMutationResult> {
   try {
     const payload = updateDashboardBusinessSettingsSchema.parse(input);
+    await requireBusinessOwnerAccess(payload.businessId);
     const business = await updateBusinessPublicBookingPageSettings({
       businessId: payload.businessId,
       showBusinessName: payload.showBusinessName,
